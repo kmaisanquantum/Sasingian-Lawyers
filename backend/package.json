@@ -5,10 +5,11 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start":  "node server.js",
+    "start":  "node scripts/init-db.js && node server.js",
     "dev":    "nodemon server.js",
-    "seed":   "node scripts/seed-users.js",
-    "build":  "echo 'Backend has no separate build step. See render.yaml for full build command.'"
+    "seed":   "node scripts/init-db.js && node scripts/seed-users.js",
+    "build":  "echo Backend build not needed",
+    "postinstall": "cd ../frontend && npm install && npm run build && cp -r dist ../backend/public"
   },
   "dependencies": {
     "bcryptjs":          "^2.4.3",
