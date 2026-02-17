@@ -22,7 +22,7 @@ services:
     # Build: install backend deps, build React frontend
     buildCommand: |
       cd backend && npm install &&
-      cd ../frontend && npm install && npm run build &&
+      cd ../frontend && npm install --include=dev && npm run build &&
       cp -r dist ../backend/public
 
     # Start the Express server (which also serves the React build)
