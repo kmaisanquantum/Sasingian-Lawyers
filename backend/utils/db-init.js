@@ -30,29 +30,48 @@ export async function dbInit(pool) {
         return "'$2a$10$2E3wKeR3NSEaXWggqq4leuPZbJk5Us0zJaLqKKyP4otxNdQuAo7u.'";
       });
 
-      // Split schema into individual statements
-      const statements = schema
-        .replace(/--.*$/gm, '')           // Remove single line comments
-        .replace(/\/\*[\s\S]*?\*\//g, '') // Remove multi-line comments
-        .split(';')
-        .map(s => s.trim())
-        .filter(s => s.length > 0);
+      // Robustly split schema into individual statements, respecting $$ blocks
+      const statements = [];
+      let currentStatement = '';
+      let inDollarBlock = false;
+      const lines = schema.split('\n');
+
+      for (const line of lines) {
+        const cleanLine = line.replace(/--.*$/, '').trim();
+
+        currentStatement += line + '\n';
+
+        if (cleanLine.includes('$$')) {
+          const matches = cleanLine.match(/\$\$/g) || [];
+          if (matches.length % 2 !== 0) {
+            inDollarBlock = !inDollarBlock;
+          }
+        }
+
+        if (!inDollarBlock && cleanLine.endsWith(';')) {
+          const stmt = currentStatement.trim();
+          if (stmt) statements.push(stmt);
+          currentStatement = '';
+        }
+      }
+      if (currentStatement.trim()) statements.push(currentStatement.trim());
 
       console.log(`🚀 Executing ${statements.length} SQL statements...`);
 
       for (let i = 0; i < statements.length; i++) {
+        const stmt = statements[i];
         try {
-          await pool.query(statements[i]);
+          await pool.query(stmt);
         } catch (stmtErr) {
-          console.error(`❌ Error in statement ${i + 1}: ${statements[i].substring(0, 50)}...`);
-          console.error(`   Message: ${stmtErr.message}`);
+          // Identify if error is fatal
+          const isExtension = stmt.toUpperCase().includes('CREATE EXTENSION');
+          const isAlreadyExists = stmtErr.message.includes('already exists');
 
-          // Ignore specific common errors that might be non-fatal
-          if (statements[i].toUpperCase().includes('CREATE EXTENSION')) {
-            console.log('   (Continuing anyway as extension might already exist or be restricted)');
-          } else if (stmtErr.message.includes('already exists')) {
-            console.log('   (Continuing as object already exists)');
+          if (isExtension || isAlreadyExists) {
+            console.log(`   ⚠️  Stmt ${i + 1} skipped: ${stmtErr.message}`);
           } else {
+            console.error(`❌ Fatal error in stmt ${i + 1}:\n${stmt.substring(0, 200)}...`);
+            console.error(`   Message: ${stmtErr.message}`);
             throw stmtErr;
           }
         }
@@ -64,6 +83,7 @@ export async function dbInit(pool) {
     }
   } catch (err) {
     console.error('❌ Database initialization failed!');
+    console.error('   Error Message:', err.message);
     console.error('   Error Stack:', err.stack);
   }
 }
