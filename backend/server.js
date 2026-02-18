@@ -15,6 +15,7 @@ import pool          from './config/database.js';
 import authRoutes    from './routes/auth.js';
 import mattersRoutes from './routes/matters.js';
 import payrollRoutes from './routes/payroll.js';
+import { dbInit }      from './utils/db-init.js';
 
 const app  = express();
 const PORT = process.env.PORT || 10000;
@@ -127,6 +128,7 @@ app.use((err, _req, res, _next) => {
 (async () => {
   try {
     await pool.query('SELECT 1');
+    await dbInit(pool);
     console.log('✅ Database connected');
     app.listen(PORT, '0.0.0.0', () => {
       console.log('\n═══════════════════════════════════════════════════════');
