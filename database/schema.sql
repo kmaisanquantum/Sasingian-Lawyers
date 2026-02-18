@@ -3,13 +3,13 @@
 -- PostgreSQL Schema — PNG Compliant (SWT + Superannuation)
 -- ================================================================
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ----------------------------------------------------------------
 -- USERS
 -- ----------------------------------------------------------------
 CREATE TABLE users (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name            VARCHAR(255) NOT NULL,
     email           VARCHAR(255) UNIQUE NOT NULL,
     password_hash   VARCHAR(255) NOT NULL,
@@ -26,7 +26,7 @@ CREATE TABLE users (
 -- CLIENTS
 -- ----------------------------------------------------------------
 CREATE TABLE clients (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     client_name     VARCHAR(255) NOT NULL,
     client_type     VARCHAR(50)  CHECK (client_type IN ('Individual','Corporate','Government','NGO')),
     email           VARCHAR(255),
@@ -44,7 +44,7 @@ CREATE TABLE clients (
 -- MATTERS / CASES
 -- ----------------------------------------------------------------
 CREATE TABLE matters (
-    id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     case_number           VARCHAR(100) UNIQUE NOT NULL,
     client_id             UUID REFERENCES clients(id) ON DELETE CASCADE,
     matter_name           VARCHAR(255) NOT NULL,
@@ -64,7 +64,7 @@ CREATE TABLE matters (
 -- TIME ENTRIES
 -- ----------------------------------------------------------------
 CREATE TABLE time_entries (
-    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     matter_id   UUID REFERENCES matters(id) ON DELETE CASCADE,
     user_id     UUID REFERENCES users(id),
     entry_date  DATE NOT NULL,
@@ -80,7 +80,7 @@ CREATE TABLE time_entries (
 -- TRUST ACCOUNTS (PNG Strict No-Overdraw)
 -- ----------------------------------------------------------------
 CREATE TABLE trust_accounts (
-    id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     matter_id        UUID REFERENCES matters(id) ON DELETE CASCADE,
     transaction_date DATE NOT NULL,
     transaction_type VARCHAR(50) NOT NULL CHECK (transaction_type IN ('Deposit','Withdrawal','Transfer','Interest')),
@@ -97,7 +97,7 @@ CREATE TABLE trust_accounts (
 -- INVOICES
 -- ----------------------------------------------------------------
 CREATE TABLE invoices (
-    id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     invoice_number VARCHAR(100) UNIQUE NOT NULL,
     matter_id      UUID REFERENCES matters(id),
     client_id      UUID REFERENCES clients(id),
@@ -115,7 +115,7 @@ CREATE TABLE invoices (
 );
 
 CREATE TABLE invoice_items (
-    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     invoice_id  UUID REFERENCES invoices(id) ON DELETE CASCADE,
     description TEXT NOT NULL,
     quantity    DECIMAL(10,2) DEFAULT 1,
@@ -128,7 +128,7 @@ CREATE TABLE invoice_items (
 -- PNG PAYROLL (SWT + Superannuation)
 -- ----------------------------------------------------------------
 CREATE TABLE payroll (
-    id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     staff_id         UUID REFERENCES users(id),
     pay_period_start DATE NOT NULL,
     pay_period_end   DATE NOT NULL,
@@ -155,7 +155,7 @@ CREATE TABLE payroll (
 -- PNG TAX RATE CONFIGURATION (2026)
 -- ----------------------------------------------------------------
 CREATE TABLE png_tax_rates (
-    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     effective_year      INTEGER NOT NULL,
     tax_free_threshold  DECIMAL(12,2) NOT NULL DEFAULT 20000.00,
     bracket_1_limit     DECIMAL(12,2) DEFAULT 12500.00,
@@ -176,7 +176,7 @@ CREATE TABLE png_tax_rates (
 -- LEAVE REQUESTS
 -- ----------------------------------------------------------------
 CREATE TABLE leave_requests (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     staff_id        UUID REFERENCES users(id),
     leave_type      VARCHAR(50) NOT NULL CHECK (leave_type IN ('Annual','Sick','Compassionate','Unpaid')),
     start_date      DATE NOT NULL,
@@ -193,7 +193,7 @@ CREATE TABLE leave_requests (
 -- AUDIT LOG
 -- ----------------------------------------------------------------
 CREATE TABLE audit_log (
-    id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id    UUID REFERENCES users(id),
     action     VARCHAR(100) NOT NULL,
     table_name VARCHAR(100),
