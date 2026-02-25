@@ -8,7 +8,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- ----------------------------------------------------------------
 -- USERS
 -- ----------------------------------------------------------------
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name            VARCHAR(255) NOT NULL,
     email           VARCHAR(255) UNIQUE NOT NULL,
@@ -25,7 +25,7 @@ CREATE TABLE users (
 -- ----------------------------------------------------------------
 -- CLIENTS
 -- ----------------------------------------------------------------
-CREATE TABLE clients (
+CREATE TABLE IF NOT EXISTS clients (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     client_name     VARCHAR(255) NOT NULL,
     client_type     VARCHAR(50)  CHECK (client_type IN ('Individual','Corporate','Government','NGO')),
@@ -43,7 +43,7 @@ CREATE TABLE clients (
 -- ----------------------------------------------------------------
 -- MATTERS / CASES
 -- ----------------------------------------------------------------
-CREATE TABLE matters (
+CREATE TABLE IF NOT EXISTS matters (
     id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     case_number           VARCHAR(100) UNIQUE NOT NULL,
     client_id             UUID REFERENCES clients(id) ON DELETE CASCADE,
@@ -63,7 +63,7 @@ CREATE TABLE matters (
 -- ----------------------------------------------------------------
 -- TIME ENTRIES
 -- ----------------------------------------------------------------
-CREATE TABLE time_entries (
+CREATE TABLE IF NOT EXISTS time_entries (
     id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     matter_id   UUID REFERENCES matters(id) ON DELETE CASCADE,
     user_id     UUID REFERENCES users(id),
@@ -79,7 +79,7 @@ CREATE TABLE time_entries (
 -- ----------------------------------------------------------------
 -- TRUST ACCOUNTS (PNG Strict No-Overdraw)
 -- ----------------------------------------------------------------
-CREATE TABLE trust_accounts (
+CREATE TABLE IF NOT EXISTS trust_accounts (
     id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     matter_id        UUID REFERENCES matters(id) ON DELETE CASCADE,
     transaction_date DATE NOT NULL,
@@ -96,7 +96,7 @@ CREATE TABLE trust_accounts (
 -- ----------------------------------------------------------------
 -- INVOICES
 -- ----------------------------------------------------------------
-CREATE TABLE invoices (
+CREATE TABLE IF NOT EXISTS invoices (
     id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     invoice_number VARCHAR(100) UNIQUE NOT NULL,
     matter_id      UUID REFERENCES matters(id),
@@ -114,7 +114,7 @@ CREATE TABLE invoices (
     updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE invoice_items (
+CREATE TABLE IF NOT EXISTS invoice_items (
     id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     invoice_id  UUID REFERENCES invoices(id) ON DELETE CASCADE,
     description TEXT NOT NULL,
@@ -127,7 +127,7 @@ CREATE TABLE invoice_items (
 -- ----------------------------------------------------------------
 -- PNG PAYROLL (SWT + Superannuation)
 -- ----------------------------------------------------------------
-CREATE TABLE payroll (
+CREATE TABLE IF NOT EXISTS payroll (
     id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     staff_id         UUID REFERENCES users(id),
     pay_period_start DATE NOT NULL,
@@ -154,7 +154,7 @@ CREATE TABLE payroll (
 -- ----------------------------------------------------------------
 -- PNG TAX RATE CONFIGURATION (2026)
 -- ----------------------------------------------------------------
-CREATE TABLE png_tax_rates (
+CREATE TABLE IF NOT EXISTS png_tax_rates (
     id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     effective_year      INTEGER NOT NULL,
     tax_free_threshold  DECIMAL(12,2) NOT NULL DEFAULT 20000.00,
@@ -175,7 +175,7 @@ CREATE TABLE png_tax_rates (
 -- ----------------------------------------------------------------
 -- LEAVE REQUESTS
 -- ----------------------------------------------------------------
-CREATE TABLE leave_requests (
+CREATE TABLE IF NOT EXISTS leave_requests (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     staff_id        UUID REFERENCES users(id),
     leave_type      VARCHAR(50) NOT NULL CHECK (leave_type IN ('Annual','Sick','Compassionate','Unpaid')),
@@ -192,7 +192,7 @@ CREATE TABLE leave_requests (
 -- ----------------------------------------------------------------
 -- AUDIT LOG
 -- ----------------------------------------------------------------
-CREATE TABLE audit_log (
+CREATE TABLE IF NOT EXISTS audit_log (
     id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id    UUID REFERENCES users(id),
     action     VARCHAR(100) NOT NULL,
@@ -207,16 +207,16 @@ CREATE TABLE audit_log (
 -- ----------------------------------------------------------------
 -- INDEXES
 -- ----------------------------------------------------------------
-CREATE INDEX idx_users_email         ON users(email);
-CREATE INDEX idx_matters_client      ON matters(client_id);
-CREATE INDEX idx_matters_status      ON matters(status);
-CREATE INDEX idx_matters_case_number ON matters(case_number);
-CREATE INDEX idx_time_entries_matter ON time_entries(matter_id);
-CREATE INDEX idx_time_entries_user   ON time_entries(user_id);
-CREATE INDEX idx_trust_matter        ON trust_accounts(matter_id);
-CREATE INDEX idx_invoices_matter     ON invoices(matter_id);
-CREATE INDEX idx_payroll_staff       ON payroll(staff_id);
-CREATE INDEX idx_payroll_period      ON payroll(pay_period_end);
+CREATE INDEX IF NOT EXISTS idx_users_email         ON users(email);
+CREATE INDEX IF NOT EXISTS idx_matters_client      ON matters(client_id);
+CREATE INDEX IF NOT EXISTS idx_matters_status      ON matters(status);
+CREATE INDEX IF NOT EXISTS idx_matters_case_number ON matters(case_number);
+CREATE INDEX IF NOT EXISTS idx_time_entries_matter ON time_entries(matter_id);
+CREATE INDEX IF NOT EXISTS idx_time_entries_user   ON time_entries(user_id);
+CREATE INDEX IF NOT EXISTS idx_trust_matter        ON trust_accounts(matter_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_matter     ON invoices(matter_id);
+CREATE INDEX IF NOT EXISTS idx_payroll_staff       ON payroll(staff_id);
+CREATE INDEX IF NOT EXISTS idx_payroll_period      ON payroll(pay_period_end);
 
 -- ----------------------------------------------------------------
 -- TRIGGERS
@@ -226,15 +226,19 @@ RETURNS TRIGGER AS $$
 BEGIN NEW.updated_at = CURRENT_TIMESTAMP; RETURN NEW; END;
 $$ language 'plpgsql';
 
+DROP TRIGGER IF EXISTS trg_users_updated_at ON users;
 CREATE TRIGGER trg_users_updated_at    BEFORE UPDATE ON users    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS trg_clients_updated_at ON clients;
 CREATE TRIGGER trg_clients_updated_at  BEFORE UPDATE ON clients  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS trg_matters_updated_at ON matters;
 CREATE TRIGGER trg_matters_updated_at  BEFORE UPDATE ON matters  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS trg_invoices_updated_at ON invoices;
 CREATE TRIGGER trg_invoices_updated_at BEFORE UPDATE ON invoices FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ----------------------------------------------------------------
 -- REPORTING VIEWS
 -- ----------------------------------------------------------------
-CREATE VIEW vw_matter_summary AS
+CREATE OR REPLACE VIEW vw_matter_summary AS
 SELECT
     m.id, m.case_number, m.matter_name, m.status, m.matter_type,
     c.client_name,
@@ -251,7 +255,7 @@ LEFT JOIN users      u2 ON m.assigned_associate_id = u2.id
 LEFT JOIN time_entries te ON m.id = te.matter_id
 GROUP BY m.id, c.client_name, u1.name, u2.name;
 
-CREATE VIEW vw_payroll_summary AS
+CREATE OR REPLACE VIEW vw_payroll_summary AS
 SELECT
     p.id, u.name AS staff_name, u.email, u.role,
     p.pay_period_start, p.pay_period_end, p.pay_frequency,
@@ -278,17 +282,19 @@ INSERT INTO png_tax_rates (
     20000.00, 0.35,
     33000.00, 0.40, 0.42,
     0.06, 0.084, 0.10, true
-);
+) ON CONFLICT DO NOTHING;
 
 -- Users (passwords set via seed-users.js script)
 INSERT INTO users (name, email, password_hash, role, hourly_rate) VALUES
 ('Admin User',      'kmaisan@dspng.tech',          '$2b$10$PLACEHOLDER', 'Admin',   0.00),
 ('Edward Sasingian','edward@sasingianpng.com',      '$2b$10$PLACEHOLDER', 'Partner', 450.00),
-('Flora Sasingian', 'flora@sasingianlawyers.com',   '$2b$10$PLACEHOLDER', 'Partner', 450.00);
+('Flora Sasingian', 'flora@sasingianlawyers.com',   '$2b$10$PLACEHOLDER', 'Partner', 450.00)
+ON CONFLICT (email) DO NOTHING;
 
 -- Sample clients
 INSERT INTO clients (client_name, client_type, email, phone, address, tin_number) VALUES
 ('Hela Provincial Government', 'Government', 'admin@hela.gov.pg',      '+675 123 4567', 'Tari, Hela Province',    'TIN-001-2024'),
 ('PNG Power Limited',          'Corporate',  'legal@pngpower.com.pg',  '+675 987 6543', 'Port Moresby, NCD',      'TIN-002-2024'),
 ('Pacific Investments Ltd',    'Corporate',  'info@pacinvest.com.pg',  '+675 321 0987', 'Lae, Morobe Province',   'TIN-003-2024'),
-('John Kila',                  'Individual', 'jkila@gmail.com',        '+675 700 1234', 'Boroko, NCD',            NULL);
+('John Kila',                  'Individual', 'jkila@gmail.com',        '+675 700 1234', 'Boroko, NCD',            NULL)
+ON CONFLICT DO NOTHING;

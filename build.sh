@@ -10,6 +10,14 @@ cd backend
 npm install
 cd ..
 
+# Database Initialization
+echo "--- 🗄️ Initializing Database ---"
+# We run this from the backend directory where the scripts are
+cd backend
+npm run init-db
+npm run seed
+cd ..
+
 # Build Frontend
 echo "--- 📦 Installing Frontend Dependencies ---"
 cd frontend
