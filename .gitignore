@@ -1,0 +1,48 @@
+# ================================================================
+# .gitignore — Sasingian Lawyers
+# ================================================================
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment — NEVER commit real secrets
+.env
+.env.local
+.env.production
+backend/.env
+frontend/.env
+
+# Frontend build output
+frontend/dist/
+frontend/build/
+
+# Backend static (generated during build)
+backend/public/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test coverage
+coverage/
+
+# Render / CI caches
+.render-buildpacks.json

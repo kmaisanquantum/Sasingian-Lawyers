@@ -1,0 +1,81 @@
+# ================================================================
+# render.yaml — Render Blueprint for Sasingian Lawyers
+# Docs: https://render.com/docs/blueprint-spec
+#
+# This file defines:
+#   1. sasingian-api    — Node.js Web Service (backend + serves frontend build)
+#   2. sasingian-db     — Managed PostgreSQL database
+#
+# Deploy:
+#   Push this repo to GitHub, then in Render Dashboard:
+#   New → Blueprint → connect repo → Render reads this file automatically.
+# ================================================================
+
+services:
+  # ── Web Service (API + Static Frontend) ─────────────────────
+  - type: web
+    name: sasingian-api
+    runtime: node
+    region: singapore           # Closest to Port Moresby, PNG
+    plan: starter               # $7/mo — upgrade to Standard for production
+
+    # Build: install backend deps, build React frontend
+    buildCommand: |
+      cd backend && npm install &&
+      cd ../frontend && npm install && npm run build &&
+      cp -r dist ../backend/public
+
+    # Start the Express server (which also serves the React build)
+    startCommand: cd backend && npm start
+
+    # Health check — Render will restart if this fails
+    healthCheckPath: /health
+
+    # Auto-deploy on every push to main
+    autoDeploy: true
+    branch: main
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      - key: PORT
+        value: 10000            # Render assigns this automatically; keep in sync
+
+      # ── Database ── (fromDatabase links to the DB service below)
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sasingian-db
+          property: connectionString
+
+      # ── Secrets ── (set these via Render Dashboard → Environment)
+      - key: JWT_SECRET
+        sync: false             # Mark as secret; paste value in dashboard
+
+      - key: JWT_EXPIRE
+        value: 7d
+
+      - key: CORS_ORIGIN
+        value: https://app.sasingianlawyers.com   # update after deploy if needed
+
+      - key: RATE_LIMIT
+        value: 100
+
+      # Initial seed passwords — used once by: npm run seed
+      - key: ADMIN_PASSWORD
+        sync: false
+
+      - key: EDWARD_PASSWORD
+        sync: false
+
+      - key: FLORA_PASSWORD
+        sync: false
+
+  # ── Managed PostgreSQL ───────────────────────────────────────
+databases:
+  - name: sasingian-db
+    databaseName: sasingian_legal
+    user: sasingian_app
+    region: singapore
+    plan: starter               # $7/mo — includes daily backups
+    ipAllowList: []             # Only internal Render network access
