@@ -20,10 +20,7 @@ services:
     plan: starter               # $7/mo — upgrade to Standard for production
 
     # Build: install backend deps, build React frontend
-    buildCommand: |
-      cd backend && npm install &&
-      cd ../frontend && npm install && npm run build &&
-      cp -r dist ../backend/public
+    buildCommand: ./build.sh
 
     # Start the Express server (which also serves the React build)
     startCommand: cd backend && npm start
