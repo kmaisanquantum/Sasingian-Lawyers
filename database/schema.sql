@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS matters (
     description           TEXT,
     budget_amount         DECIMAL(12,2),
     archived_at           TIMESTAMP,
+    statute_of_limitations DATE,
     created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

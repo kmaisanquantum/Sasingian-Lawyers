@@ -116,16 +116,16 @@ router.post('/', authorize('Admin','Partner'),
 
     try {
       const { caseNumber, clientId, matterName, matterType,
-              assignedPartnerId, assignedAssociateId, estimatedValue, description } = req.body;
+              assignedPartnerId, assignedAssociateId, estimatedValue, description, statuteOfLimitations, budgetAmount } = req.body;
 
       const dup = await query('SELECT id FROM matters WHERE case_number = $1', [caseNumber]);
       if (dup.rows.length) return res.status(400).json({ success: false, message: 'Case number already exists.' });
 
       const { rows } = await query(
-        `INSERT INTO matters (case_number, client_id, matter_name, matter_type,
+        `INSERT INTO matters (case_number, client_id, matter_name, matter_type, statute_of_limitations, budget_amount,
            assigned_partner_id, assigned_associate_id, estimated_value, description)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-        [caseNumber, clientId, matterName, matterType,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+        [caseNumber, clientId, matterName, matterType, statuteOfLimitations || null, budgetAmount || null,
          assignedPartnerId || null, assignedAssociateId || null,
          estimatedValue || null, description || null]
       );
