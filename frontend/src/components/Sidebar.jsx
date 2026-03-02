@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 
 const NAV = [
   { to: '/',         icon: LayoutDashboard, label: 'Dashboard'    },
-  { to: '/matters',  icon: FolderOpen,      label: 'Matters'      },
+  { to: '/matters',  icon: FolderOpen,      label: 'Matters & Intake' },
   { to: '/account',  icon: Wallet,          label: 'Account'       },
   { to: '/payroll',  icon: FileText,        label: 'Payroll'      },
   { to: '/staff',    icon: Users,           label: 'Staff / HR'   },
