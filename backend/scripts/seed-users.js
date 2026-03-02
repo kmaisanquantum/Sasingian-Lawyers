@@ -25,7 +25,7 @@ async function seed () {
   for (const u of users) {
     const hash = await bcrypt.hash(u.password, 10);
     const { rowCount } = await pool.query(
-      'UPDATE users SET password_hash = $1 WHERE email = $2',
+      "UPDATE users SET password_hash = $1 WHERE email = $2 AND password_hash = '$2b$10$PLACEHOLDER'",
       [hash, u.email]
     );
     console.log(rowCount ? `  ✅  ${u.email}` : `  ⚠️  not found: ${u.email}`);
