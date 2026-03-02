@@ -20,15 +20,29 @@ const users = [
   { email: 'flora@sasingianlawyers.com', password: process.env.FLORA_PASSWORD   || 'Flora@Partner2026!'   },
 ];
 
+const PLACEHOLDER_HASH = '$2b$10$PLACEHOLDER';
+
 async function seed () {
   console.log('\n🔐  Seeding user passwords…\n');
   for (const u of users) {
+    const { rows } = await pool.query('SELECT password_hash FROM users WHERE email = $1', [u.email]);
+
+    if (rows.length === 0) {
+      console.log(`  ⚠️  not found: ${u.email}`);
+      continue;
+    }
+
+    if (rows[0].password_hash !== PLACEHOLDER_HASH) {
+      console.log(`  ℹ️  already seeded: ${u.email}`);
+      continue;
+    }
+
     const hash = await bcrypt.hash(u.password, 10);
     const { rowCount } = await pool.query(
-      "UPDATE users SET password_hash = $1 WHERE email = $2 AND password_hash = '$2b$10$PLACEHOLDER'",
+      'UPDATE users SET password_hash = $1 WHERE email = $2',
       [hash, u.email]
     );
-    console.log(rowCount ? `  ✅  ${u.email}` : `  ⚠️  not found: ${u.email}`);
+    console.log(rowCount ? `  ✅  ${u.email}` : `  ⚠️  failed to update: ${u.email}`);
   }
   console.log('\n✅  Done.  Change passwords after first login!\n');
   await pool.end();
