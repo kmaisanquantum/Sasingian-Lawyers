@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Users, UserPlus, AlertCircle, Trash2 } from 'lucide-react';
+import { Users, UserPlus, AlertCircle, Trash2, Key } from 'lucide-react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
@@ -15,6 +15,8 @@ export default function Staff() {
   const { user: me }              = useAuth();
   const [staff,   setStaff]       = useState([]);
   const [modal,   setModal]       = useState(false);
+  const [passModal, setPassModal] = useState(null); // stores user object
+  const [newPass, setNewPass]     = useState('');
   const [form,    setForm]        = useState({ name: '', email: '', password: '', role: 'Associate', hourlyRate: '', annualSalary: '' });
   const [loading, setLoading]     = useState(true);
   const [error,   setError]       = useState('');
@@ -37,6 +39,20 @@ export default function Staff() {
       await api.delete(`/auth/users/${id}`);
       setSuccess('Staff member deleted successfully.');
       load();
+    } catch (e) {
+      setError(e.response?.data?.message || e.message);
+    } finally { setLoading(false); }
+  }
+
+  async function resetPassword(e) {
+    e.preventDefault();
+    if (!passModal) return;
+    setError(''); setSuccess(''); setLoading(true);
+    try {
+      await api.put(`/auth/users/${passModal.id}/password`, { newPassword: newPass });
+      setSuccess(`Password for ${passModal.name} updated successfully.`);
+      setPassModal(null);
+      setNewPass('');
     } catch (e) {
       setError(e.response?.data?.message || e.message);
     } finally { setLoading(false); }
@@ -108,15 +124,26 @@ export default function Staff() {
             <div className="col-span-1 text-center">
               <span className={`inline-block w-2 h-2 rounded-full ${s.is_active ? 'bg-jade-500' : 'bg-crimson-400'}`} />
             </div>
-            <div className="col-span-1 text-right">
-              {me?.role === 'Admin' && s.id !== me?.id && (
-                <button
-                  onClick={() => deleteUser(s.id)}
-                  className="p-2 text-ink/30 hover:text-crimson-600 transition-colors"
-                  title="Delete User"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+            <div className="col-span-1 text-right flex justify-end gap-1">
+              {me?.role === 'Admin' && (
+                <>
+                  <button
+                    onClick={() => setPassModal(s)}
+                    className="p-2 text-ink/30 hover:text-gold-600 transition-colors"
+                    title="Reset Password"
+                  >
+                    <Key className="w-4 h-4" />
+                  </button>
+                  {s.id !== me?.id && (
+                    <button
+                      onClick={() => deleteUser(s.id)}
+                      className="p-2 text-ink/30 hover:text-crimson-600 transition-colors"
+                      title="Delete User"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -169,11 +196,33 @@ export default function Staff() {
                     value={form.annualSalary} onChange={e => setForm(f => ({...f, annualSalary: e.target.value}))} />
                 </div>
               </div>
-              {error && <p className="text-crimson-700 text-sm font-medium bg-crimson-50 border-2 border-crimson-600 p-2">{error}</p>}
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => { setModal(false); setError(''); }} className="btn-secondary flex-1 justify-center">Cancel</button>
                 <button type="submit" disabled={loading} className="btn-gold flex-1 justify-center">
                   {loading ? 'Creating…' : 'Create User'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Password Modal */}
+      {passModal && (
+        <div className="fixed inset-0 bg-ink/60 flex items-center justify-center z-50 p-4">
+          <div className="card w-full max-w-md p-6 animate-fadeIn">
+            <h3 className="font-display font-bold text-2xl text-ink mb-1">Reset Password</h3>
+            <p className="text-ink/50 text-sm font-medium mb-5">Changing password for <b>{passModal.name}</b></p>
+            <form onSubmit={resetPassword} className="space-y-4">
+              <div>
+                <label className="label">New Password</label>
+                <input type="password" required minLength={8} className="input" placeholder="Min 8 characters"
+                  autoFocus value={newPass} onChange={e => setNewPass(e.target.value)} />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => { setPassModal(null); setError(''); setNewPass(''); }} className="btn-secondary flex-1 justify-center">Cancel</button>
+                <button type="submit" disabled={loading} className="btn-gold flex-1 justify-center">
+                  {loading ? 'Updating…' : 'Update Password'}
                 </button>
               </div>
             </form>

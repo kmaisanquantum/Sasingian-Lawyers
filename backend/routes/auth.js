@@ -92,6 +92,25 @@ router.put('/change-password', authenticate,
   }
 );
 
+/* ── PUT /api/auth/users/:id/password (Admin only) ─────────── */
+router.put('/users/:id/password', authenticate, authorize('Admin'),
+  [ body('newPassword').isLength({ min: 8 }) ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ success: false, errors: errors.array() });
+
+    try {
+      const hash = await bcrypt.hash(req.body.newPassword, 10);
+      const { rowCount } = await query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, req.params.id]);
+      if (!rowCount) return res.status(404).json({ success: false, message: 'User not found.' });
+
+      res.json({ success: true, message: 'User password updated.' });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+);
+
 /* ── DELETE /api/auth/users/:id (Admin only) ────────────────── */
 router.delete('/users/:id', authenticate, authorize('Admin'), async (req, res) => {
   try {
