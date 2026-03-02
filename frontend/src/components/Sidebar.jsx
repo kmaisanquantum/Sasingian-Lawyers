@@ -1,11 +1,11 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Scale, LayoutDashboard, FolderOpen, DollarSign, Users, FileText, LogOut, ChevronRight } from 'lucide-react';
+import { Scale, LayoutDashboard, FolderOpen, Wallet, Users, FileText, LogOut, ChevronRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const NAV = [
   { to: '/',         icon: LayoutDashboard, label: 'Dashboard'    },
   { to: '/matters',  icon: FolderOpen,      label: 'Matters'      },
-  { to: '/trust',    icon: DollarSign,      label: 'Trust Accounts'},
+  { to: '/account',  icon: Wallet,          label: 'Account'       },
   { to: '/payroll',  icon: FileText,        label: 'Payroll'      },
   { to: '/staff',    icon: Users,           label: 'Staff / HR'   },
 ];

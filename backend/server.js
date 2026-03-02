@@ -15,6 +15,7 @@ import pool          from './config/database.js';
 import authRoutes    from './routes/auth.js';
 import mattersRoutes from './routes/matters.js';
 import payrollRoutes from './routes/payroll.js';
+import accountingRoutes from "./routes/accounting.js";
 
 const app  = express();
 const PORT = process.env.PORT || 10000;
@@ -74,6 +75,7 @@ app.get('/health', (_req, res) => res.json({
 app.use('/api/auth',    authRoutes);
 app.use('/api/matters', mattersRoutes);
 app.use('/api/payroll', payrollRoutes);
+app.use('/api/accounting', accountingRoutes);
 
 // ── Serve React SPA (production) ──────────────────────────────
 // The Render build step copies frontend/dist → backend/public

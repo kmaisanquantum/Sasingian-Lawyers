@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Scale, Clock, DollarSign, TrendingUp, FolderOpen, Plus, AlertCircle } from 'lucide-react';
+import { Scale, Clock, DollarSign, Wallet, TrendingUp, FolderOpen, Plus, AlertCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import Layout    from '../components/Layout';
 import StatCard  from '../components/StatCard';
@@ -155,7 +155,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-6 animate-fadeIn" style={{ animationDelay: '0.15s' }}>
         {[
           { to: '/matters',  icon: FolderOpen,  label: 'Matter Management', desc: 'Create, track & manage cases',      color: 'gold'    },
-          { to: '/trust',    icon: DollarSign,  label: 'Trust Accounting',  desc: 'Client fund ledger & transactions', color: 'jade'    },
+          { to: '/account',  icon: Wallet,      label: 'Account Ledger',    desc: 'Trust & Operating ledgers', color: 'jade'    },
           { to: '/payroll',  icon: Scale,       label: 'PNG Payroll',       desc: 'SWT & superannuation calculator',   color: 'crimson' },
         ].map(({ to, icon: Icon, label, desc, color }) => (
           <Link key={to} to={to} className="card-hover p-5 flex items-center gap-4 group">
