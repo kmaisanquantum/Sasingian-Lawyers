@@ -7,6 +7,11 @@ export const authenticate = async (req, res, next) => {
     if (!auth?.startsWith('Bearer '))
       return res.status(401).json({ success: false, message: 'No token provided.' });
 
+    if (!process.env.JWT_SECRET) {
+      console.error('CRITICAL: JWT_SECRET environment variable is missing.');
+      return res.status(500).json({ success: false, message: 'Authentication configuration error.' });
+    }
+
     const decoded = jwt.verify(auth.slice(7), process.env.JWT_SECRET);
 
     const { rows } = await query(
@@ -33,6 +38,10 @@ export const authorize = (...roles) => (req, res, next) => {
   next();
 };
 
-export const generateToken = (user) =>
-  jwt.sign({ userId: user.id, email: user.email, role: user.role },
+export const generateToken = (user) => {
+  if (!process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET environment variable is missing.');
+  }
+  return jwt.sign({ userId: user.id, email: user.email, role: user.role },
     process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRE || '7d' });
+};
