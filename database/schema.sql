@@ -86,6 +86,8 @@ CREATE TABLE IF NOT EXISTS trust_accounts (
     transaction_type VARCHAR(50) NOT NULL CHECK (transaction_type IN ('Deposit','Withdrawal','Transfer','Interest')),
     amount           DECIMAL(12,2) NOT NULL,
     balance          DECIMAL(12,2) NOT NULL,
+    reconciled_at    TIMESTAMP,
+    bank_statement_ref VARCHAR(100),
     description      TEXT NOT NULL,
     reference_number VARCHAR(100),
     created_by       UUID REFERENCES users(id),
@@ -298,3 +300,64 @@ INSERT INTO clients (client_name, client_type, email, phone, address, tin_number
 ('Pacific Investments Ltd',    'Corporate',  'info@pacinvest.com.pg',  '+675 321 0987', 'Lae, Morobe Province',   'TIN-003-2024'),
 ('John Kila',                  'Individual', 'jkila@gmail.com',        '+675 700 1234', 'Boroko, NCD',            NULL)
 ON CONFLICT DO NOTHING;
+
+-- ----------------------------------------------------------------
+-- OPERATING ACCOUNT (Firm Overhead & Income)
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS firm_operating_ledger (
+    id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    transaction_date DATE NOT NULL,
+    category         VARCHAR(100) NOT NULL CHECK (category IN ('Rent','Salary','Marketing','Professional Dues','Realized Income','Other')),
+    amount           DECIMAL(12,2) NOT NULL,
+    balance          DECIMAL(12,2) NOT NULL,
+    description      TEXT NOT NULL,
+    reference_number VARCHAR(100),
+    created_by       UUID REFERENCES users(id),
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ----------------------------------------------------------------
+-- REIMBURSABLE EXPENSES (Costs Advanced)
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS reimbursable_expenses (
+    id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    matter_id        UUID REFERENCES matters(id) ON DELETE CASCADE,
+    description      TEXT NOT NULL,
+    amount           DECIMAL(12,2) NOT NULL,
+    expense_date     DATE NOT NULL,
+    is_invoiced      BOOLEAN DEFAULT false,
+    created_by       UUID REFERENCES users(id),
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ----------------------------------------------------------------
+-- ADDITIONAL REPORTING VIEWS
+-- ----------------------------------------------------------------
+CREATE OR REPLACE VIEW vw_accounts_receivable AS
+SELECT
+    m.id AS matter_id,
+    m.case_number,
+    m.matter_name,
+    c.client_name,
+    COALESCE(SUM(i.total_amount), 0) AS total_billed,
+    COALESCE(SUM(CASE WHEN i.status != 'Paid' THEN i.total_amount ELSE 0 END), 0) AS amount_due
+FROM matters m
+JOIN clients c ON m.client_id = c.id
+LEFT JOIN invoices i ON m.id = i.matter_id AND i.status != 'Cancelled'
+GROUP BY m.id, m.case_number, m.matter_name, c.client_name;
+
+CREATE OR REPLACE VIEW vw_work_in_progress AS
+SELECT
+    m.id AS matter_id,
+    m.case_number,
+    m.matter_name,
+    c.client_name,
+    COALESCE(SUM(CASE WHEN te.is_billable AND NOT te.is_invoiced THEN te.hours * te.hourly_rate ELSE 0 END), 0) AS unbilled_time,
+    COALESCE((SELECT SUM(amount) FROM reimbursable_expenses re WHERE re.matter_id = m.id AND NOT re.is_invoiced), 0) AS unbilled_expenses
+FROM matters m
+JOIN clients c ON m.client_id = c.id
+LEFT JOIN time_entries te ON m.id = te.matter_id
+GROUP BY m.id, m.case_number, m.matter_name, c.client_name;
+
+CREATE INDEX IF NOT EXISTS idx_firm_op_date ON firm_operating_ledger(transaction_date);
+CREATE INDEX IF NOT EXISTS idx_reimbursable_matter ON reimbursable_expenses(matter_id);
