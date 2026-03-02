@@ -116,16 +116,16 @@ router.post('/', authorize('Admin','Partner'),
 
     try {
       const { caseNumber, clientId, matterName, matterType,
-              assignedPartnerId, assignedAssociateId, estimatedValue, description } = req.body;
+              assignedPartnerId, assignedAssociateId, estimatedValue, description, statuteOfLimitations, budgetAmount } = req.body;
 
       const dup = await query('SELECT id FROM matters WHERE case_number = $1', [caseNumber]);
       if (dup.rows.length) return res.status(400).json({ success: false, message: 'Case number already exists.' });
 
       const { rows } = await query(
-        `INSERT INTO matters (case_number, client_id, matter_name, matter_type,
+        `INSERT INTO matters (case_number, client_id, matter_name, matter_type, statute_of_limitations, budget_amount,
            assigned_partner_id, assigned_associate_id, estimated_value, description)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-        [caseNumber, clientId, matterName, matterType,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+        [caseNumber, clientId, matterName, matterType, statuteOfLimitations || null, budgetAmount || null,
          assignedPartnerId || null, assignedAssociateId || null,
          estimatedValue || null, description || null]
       );
@@ -265,5 +265,142 @@ router.post('/:id/trust/withdraw', authorize('Admin','Partner'),
     }
   }
 );
+
+
+/* ── Documents ──────────────────────────────────────────────── */
+router.get('/:id/documents', async (req, res) => {
+  try {
+    const { rows } = await query('SELECT * FROM matter_documents WHERE matter_id = $1 ORDER BY created_at DESC', [req.params.id]);
+    res.json({ success: true, data: rows });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.post('/:id/documents', [ body('category').notEmpty(), body('fileName').notEmpty(), body('filePath').notEmpty() ], async (req, res) => {
+  try {
+    const { category, fileName, filePath } = req.body;
+    const { rows } = await query(
+      'INSERT INTO matter_documents (matter_id, category, file_name, file_path, uploaded_by) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [req.params.id, category, fileName, filePath, req.user.id]
+    );
+    res.status(201).json({ success: true, data: rows[0] });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+/* ── Tasks ──────────────────────────────────────────────────── */
+router.get('/:id/tasks', async (req, res) => {
+  try {
+    const { rows } = await query('SELECT * FROM matter_tasks WHERE matter_id = $1 ORDER BY due_date ASC', [req.params.id]);
+    res.json({ success: true, data: rows });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.post('/:id/tasks', [ body('title').notEmpty() ], async (req, res) => {
+  try {
+    const { title, description, status, dueDate, assignedTo } = req.body;
+    const { rows } = await query(
+      'INSERT INTO matter_tasks (matter_id, title, description, status, due_date, assigned_to) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [req.params.id, title, description, status || 'Pending', dueDate || null, assignedTo || null]
+    );
+    res.status(201).json({ success: true, data: rows[0] });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+/* ── Events ─────────────────────────────────────────────────── */
+router.get('/:id/events', async (req, res) => {
+  try {
+    const { rows } = await query('SELECT * FROM matter_events WHERE matter_id = $1 ORDER BY start_time ASC', [req.params.id]);
+    res.json({ success: true, data: rows });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.post('/:id/events', [ body('title').notEmpty(), body('startTime').isISO8601() ], async (req, res) => {
+  try {
+    const { title, eventType, startTime, endTime, location } = req.body;
+    const { rows } = await query(
+      'INSERT INTO matter_events (matter_id, title, event_type, start_time, end_time, location) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [req.params.id, title, eventType, startTime, endTime, location]
+    );
+    res.status(201).json({ success: true, data: rows[0] });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+/* ── Parties ────────────────────────────────────────────────── */
+router.get('/:id/parties', async (req, res) => {
+  try {
+    const { rows } = await query('SELECT * FROM matter_parties WHERE matter_id = $1', [req.params.id]);
+    res.json({ success: true, data: rows });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.post('/:id/parties', [ body('name').notEmpty(), body('role').notEmpty() ], async (req, res) => {
+  try {
+    const { name, role, contactInfo } = req.body;
+    const { rows } = await query(
+      'INSERT INTO matter_parties (matter_id, name, role, contact_info) VALUES ($1, $2, $3, $4) RETURNING *',
+      [req.params.id, name, role, contactInfo]
+    );
+    res.status(201).json({ success: true, data: rows[0] });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+/* ── Notes ──────────────────────────────────────────────────── */
+router.get('/:id/notes', async (req, res) => {
+  try {
+    const { rows } = await query(`
+      SELECT n.*, u.name as author_name
+      FROM matter_notes n
+      JOIN users u ON n.created_by = u.id
+      WHERE n.matter_id = $1
+      ORDER BY n.created_at DESC`, [req.params.id]);
+    res.json({ success: true, data: rows });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+router.post('/:id/notes', [ body('content').notEmpty() ], async (req, res) => {
+  try {
+    const { content } = req.body;
+    const { rows } = await query(
+      'INSERT INTO matter_notes (matter_id, content, created_by) VALUES ($1, $2, $3) RETURNING *',
+      [req.params.id, content, req.user.id]
+    );
+    res.status(201).json({ success: true, data: rows[0] });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+/* ── Analytics ──────────────────────────────────────────────── */
+router.get('/:id/analytics', async (req, res) => {
+  try {
+    const [billed, expenses, budget] = await Promise.all([
+      query("SELECT SUM(total_amount) as total FROM invoices WHERE matter_id = $1 AND status = 'Paid'", [req.params.id]),
+      query('SELECT SUM(amount) as total FROM reimbursable_expenses WHERE matter_id = $1', [req.params.id]),
+      query('SELECT budget_amount, estimated_value FROM matters WHERE id = $1', [req.params.id])
+    ]);
+    res.json({
+      success: true,
+      data: {
+        realizedRevenue: billed.rows[0]?.total || 0,
+        totalExpenses: expenses.rows[0]?.total || 0,
+        budget: budget.rows[0]?.budget_amount || 0,
+        estimatedValue: budget.rows[0]?.estimated_value || 0
+      }
+    });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+/* ── Conflict Checks ────────────────────────────────────────── */
+router.post('/conflict-check', [ body('searchTerms').notEmpty() ], async (req, res) => {
+  try {
+    const { searchTerms } = req.body;
+    const results = await query(
+      "SELECT client_name as name, 'Client' as type FROM clients WHERE client_name ILIKE $1 UNION SELECT matter_name as name, 'Matter' as type FROM matters WHERE matter_name ILIKE $1",
+      [`%${searchTerms}%`]
+    );
+    const { rows } = await query(
+      'INSERT INTO conflict_checks (search_terms, results) VALUES ($1, $2) RETURNING *',
+      [searchTerms, JSON.stringify(results.rows)]
+    );
+    res.status(201).json({ success: true, data: rows[0] });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
 
 export default router;

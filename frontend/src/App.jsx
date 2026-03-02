@@ -5,6 +5,8 @@ import ProtectedRoute   from './components/ProtectedRoute';
 import Login     from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Matters   from './pages/Matters';
+import NewMatter from './pages/NewMatter';
+import MatterDetail from './pages/MatterDetail';
 import Account   from './pages/Account';
 import Payroll   from './pages/Payroll';
 import Staff     from './pages/Staff';
@@ -19,8 +21,12 @@ export default function App() {
           <Route path="/" element={
             <ProtectedRoute><Dashboard /></ProtectedRoute>
           }/>
+          <Route path="/matters/new" element={<ProtectedRoute><NewMatter /></ProtectedRoute>} />
           <Route path="/matters" element={
             <ProtectedRoute><Matters /></ProtectedRoute>
+          }/>
+          <Route path="/matters/:id" element={
+            <ProtectedRoute><MatterDetail /></ProtectedRoute>
           }/>
           <Route path="/account" element={
             <ProtectedRoute><Account /></ProtectedRoute>

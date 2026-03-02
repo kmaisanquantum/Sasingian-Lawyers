@@ -56,6 +56,9 @@ CREATE TABLE IF NOT EXISTS matters (
     closing_date          DATE,
     estimated_value       DECIMAL(12,2),
     description           TEXT,
+    budget_amount         DECIMAL(12,2),
+    archived_at           TIMESTAMP,
+    statute_of_limitations DATE,
     created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -361,3 +364,85 @@ GROUP BY m.id, m.case_number, m.matter_name, c.client_name;
 
 CREATE INDEX IF NOT EXISTS idx_firm_op_date ON firm_operating_ledger(transaction_date);
 CREATE INDEX IF NOT EXISTS idx_reimbursable_matter ON reimbursable_expenses(matter_id);
+
+-- ----------------------------------------------------------------
+-- MATTER DOCUMENTS
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS matter_documents (
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    matter_id     UUID REFERENCES matters(id) ON DELETE CASCADE,
+    category      VARCHAR(100) NOT NULL CHECK (category IN ('Pleading','Correspondence','Evidence','Template','Other')),
+    file_name     VARCHAR(255) NOT NULL,
+    file_path     TEXT NOT NULL,
+    uploaded_by   UUID REFERENCES users(id),
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ----------------------------------------------------------------
+-- MATTER TASKS
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS matter_tasks (
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    matter_id     UUID REFERENCES matters(id) ON DELETE CASCADE,
+    title         VARCHAR(255) NOT NULL,
+    description   TEXT,
+    status        VARCHAR(50) DEFAULT 'Pending' CHECK (status IN ('Pending','In Progress','Completed','Deferred','Cancelled')),
+    due_date      DATE,
+    assigned_to   UUID REFERENCES users(id),
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ----------------------------------------------------------------
+-- MATTER EVENTS (Calendar & Deadlines)
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS matter_events (
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    matter_id     UUID REFERENCES matters(id) ON DELETE CASCADE,
+    title         VARCHAR(255) NOT NULL,
+    event_type    VARCHAR(100) NOT NULL CHECK (event_type IN ('Court Date','Filing Deadline','Statute of Limitations','Meeting','Hearing','Other')),
+    start_time    TIMESTAMP NOT NULL,
+    end_time      TIMESTAMP NOT NULL,
+    location      TEXT,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ----------------------------------------------------------------
+-- MATTER PARTIES & CONTACTS
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS matter_parties (
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    matter_id     UUID REFERENCES matters(id) ON DELETE CASCADE,
+    name          VARCHAR(255) NOT NULL,
+    role          VARCHAR(100) NOT NULL CHECK (role IN ('Client','Opposing Counsel','Judge','Witness','Expert','Other')),
+    contact_info  TEXT,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ----------------------------------------------------------------
+-- MATTER ACTIVITY LOG & NOTES
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS matter_notes (
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    matter_id     UUID REFERENCES matters(id) ON DELETE CASCADE,
+    content       TEXT NOT NULL,
+    created_by    UUID REFERENCES users(id),
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ----------------------------------------------------------------
+-- CONFLICT CHECKS (Intake)
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS conflict_checks (
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    search_terms  TEXT NOT NULL,
+    results       JSONB,
+    is_cleared    BOOLEAN DEFAULT false,
+    cleared_by    UUID REFERENCES users(id),
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_matter_docs_matter ON matter_documents(matter_id);
+CREATE INDEX IF NOT EXISTS idx_matter_tasks_matter ON matter_tasks(matter_id);
+CREATE INDEX IF NOT EXISTS idx_matter_events_matter ON matter_events(matter_id);
+CREATE INDEX IF NOT EXISTS idx_matter_parties_matter ON matter_parties(matter_id);
+CREATE INDEX IF NOT EXISTS idx_matter_notes_matter ON matter_notes(matter_id);

@@ -9,6 +9,7 @@
     "dev":    "nodemon server.js",
     "seed":   "node scripts/seed-users.js",
     "init-db": "node scripts/init-db.js",
+    "remind-deadlines": "node scripts/remind-statutes.js",
     "build":  "echo 'Backend has no separate build step. See render.yaml for full build command.'"
   },
   "dependencies": {
