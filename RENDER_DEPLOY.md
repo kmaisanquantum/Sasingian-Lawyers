@@ -122,7 +122,7 @@ Output should show:
 ```
 ✅  kmaisan@dspng.tech
 ✅  edward@sasingianpng.com
-✅  flora@sasingianlawyers.com
+✅  flora@sasingianpng.com
 ```
 
 #### 6. Add Custom Domain
@@ -264,7 +264,7 @@ npm run dev          # → http://localhost:5173  (proxies /api to port 10000)
 |---------|--------------------------------|------------------------|
 | Admin   | `kmaisan@dspng.tech`           | `Admin@Sasingian2026!` |
 | Partner | `edward@sasingianpng.com`      | `Edward@Partner2026!`  |
-| Partner | `flora@sasingianlawyers.com`   | `Flora@Partner2026!`   |
+| Partner | `flora@sasingianpng.com`   | `Flora@Partner2026!`   |
 
 ---
 

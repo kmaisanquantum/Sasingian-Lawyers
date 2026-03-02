@@ -288,7 +288,7 @@ INSERT INTO png_tax_rates (
 INSERT INTO users (name, email, password_hash, role, hourly_rate) VALUES
 ('Admin User',      'kmaisan@dspng.tech',          '$2b$10$PLACEHOLDER', 'Admin',   0.00),
 ('Edward Sasingian','edward@sasingianpng.com',      '$2b$10$PLACEHOLDER', 'Partner', 450.00),
-('Flora Sasingian', 'flora@sasingianlawyers.com',   '$2b$10$PLACEHOLDER', 'Partner', 450.00)
+('Flora Sasingian', 'flora@sasingianpng.com',   '$2b$10$PLACEHOLDER', 'Partner', 450.00)
 ON CONFLICT (email) DO NOTHING;
 
 -- Sample clients

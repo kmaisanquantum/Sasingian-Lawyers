@@ -90,7 +90,7 @@ npm run dev            # → http://localhost:5173
 |---------|--------------------------------|------------------------|
 | Admin   | kmaisan@dspng.tech             | Admin@Sasingian2026!   |
 | Partner | edward@sasingianpng.com        | Edward@Partner2026!    |
-| Partner | flora@sasingianlawyers.com     | Flora@Partner2026!     |
+| Partner | flora@sasingianpng.com     | Flora@Partner2026!     |
 
 ---
 
