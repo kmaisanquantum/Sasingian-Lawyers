@@ -92,6 +92,25 @@ router.put('/change-password', authenticate,
   }
 );
 
+/* ── DELETE /api/auth/users/:id (Admin only) ────────────────── */
+router.delete('/users/:id', authenticate, authorize('Admin'), async (req, res) => {
+  try {
+    if (req.params.id === req.user.id)
+      return res.status(400).json({ success: false, message: 'You cannot delete your own account.' });
+
+    const { rowCount } = await query('DELETE FROM users WHERE id = $1', [req.params.id]);
+
+    if (!rowCount)
+      return res.status(404).json({ success: false, message: 'User not found.' });
+
+    res.json({ success: true, message: 'User deleted successfully.' });
+  } catch (err) {
+    if (err.code === '23503')
+      return res.status(400).json({ success: false, message: 'Cannot delete user because they have associated records (e.g. time entries, matters). Consider deactivating them instead.' });
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 /* ── GET /api/auth/users  (Admin/Partner) ─────────────────────── */
 router.get('/users', authenticate, authorize('Admin', 'Partner'), async (req, res) => {
   try {

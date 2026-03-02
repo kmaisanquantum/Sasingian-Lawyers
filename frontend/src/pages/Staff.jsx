@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Users, UserPlus, AlertCircle } from 'lucide-react';
+import { Users, UserPlus, AlertCircle, Trash2 } from 'lucide-react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
@@ -28,6 +28,18 @@ export default function Staff() {
       setStaff(data.data || []);
     } catch (e) { setError(e.response?.data?.message || e.message); }
     finally { setLoading(false); }
+  }
+
+  async function deleteUser(id) {
+    if (!window.confirm('Are you sure you want to delete this staff member? This action cannot be undone.')) return;
+    setError(''); setSuccess(''); setLoading(true);
+    try {
+      await api.delete(`/auth/users/${id}`);
+      setSuccess('Staff member deleted successfully.');
+      load();
+    } catch (e) {
+      setError(e.response?.data?.message || e.message);
+    } finally { setLoading(false); }
   }
 
   async function createUser(e) {
@@ -68,8 +80,8 @@ export default function Staff() {
 
       <div className="card">
         <div className="grid grid-cols-12 gap-3 px-5 py-3 border-b-2 border-ink/10 bg-ink/[0.03]">
-          {['Name', 'Email', 'Role', 'Hourly Rate', 'Status'].map((h, i) => (
-            <div key={h} className={`text-xs font-black uppercase tracking-widest text-ink/50
+          {['Name', 'Email', 'Role', 'Hourly Rate', 'Status', ''].map((h, i) => (
+            <div key={i} className={`text-xs font-black uppercase tracking-widest text-ink/50
               ${i===0?'col-span-3':''} ${i===1?'col-span-4':''} ${i===2?'col-span-2':''} 
               ${i===3?'col-span-2 text-right':''} ${i===4?'col-span-1 text-center':''}`}>{h}</div>
           ))}
@@ -95,6 +107,17 @@ export default function Staff() {
             </div>
             <div className="col-span-1 text-center">
               <span className={`inline-block w-2 h-2 rounded-full ${s.is_active ? 'bg-jade-500' : 'bg-crimson-400'}`} />
+            </div>
+            <div className="col-span-1 text-right">
+              {me?.role === 'Admin' && s.id !== me?.id && (
+                <button
+                  onClick={() => deleteUser(s.id)}
+                  className="p-2 text-ink/30 hover:text-crimson-600 transition-colors"
+                  title="Delete User"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
         ))}
