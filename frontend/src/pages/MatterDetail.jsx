@@ -58,6 +58,8 @@ export default function MatterDetail() {
         const { data } = await api.get(`/matters/${id}/notes`);
         setNotes(data.data);
       } else if (activeTab === 'billing') {
+        const { data: aData } = await api.get(`/matters/${id}/analytics`);
+        setAnalytics(aData.data);
         const { data } = await api.get(`/matters/${id}/trust`);
         setTrustHistory(data.data || []);
       }
@@ -68,12 +70,12 @@ export default function MatterDetail() {
   if (!matter) return <Layout><div className="py-20 text-center text-crimson-600 font-bold">Matter not found.</div></Layout>;
 
   const TABS = [
-    { id: 'dashboard', label: 'Dashboard',      icon: FolderOpen },
-    { id: 'parties',   label: 'Parties',        icon: Users },
-    { id: 'documents', label: 'Documents',      icon: FileText },
+    { id: 'dashboard', label: 'Dashboard/Details', icon: FolderOpen },
+    { id: 'parties',   label: 'Parties/Contacts', icon: Users },
+    { id: 'documents', label: 'Documents & Content', icon: FileText },
     { id: 'tasks',     label: 'Tasks & Calendar', icon: Calendar },
-    { id: 'billing',   label: 'Time & Billing',  icon: DollarSign },
-    { id: 'activity',  label: 'Activity Log',   icon: History },
+    { id: 'billing',   label: 'Financials & Billing', icon: DollarSign },
+    { id: 'activity',  label: 'Notes & Activity Log', icon: History },
   ];
 
   return (
