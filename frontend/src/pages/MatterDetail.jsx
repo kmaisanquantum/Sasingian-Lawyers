@@ -4,7 +4,8 @@ import {
   FolderOpen, FileText, Calendar, DollarSign,
   Users, BarChart3, Clock, Plus, History,
   CheckCircle2, AlertCircle, ChevronLeft,
-  Mail, Paperclip, MessageSquare, Briefcase
+  Mail, Paperclip, MessageSquare, Briefcase,
+  ArrowUpCircle, ArrowDownCircle, Landmark
 } from 'lucide-react';
 import Layout from '../components/Layout';
 import api    from '../utils/api';
@@ -24,6 +25,7 @@ export default function MatterDetail() {
   const [events, setEvents]   = useState([]);
   const [parties, setParties] = useState([]);
   const [notes, setNotes]     = useState([]);
+  const [trustHistory, setTrustHistory] = useState([]);
   const [analytics, setAnalytics] = useState(null);
 
   useEffect(() => { loadMatter(); }, [id]);
@@ -42,7 +44,7 @@ export default function MatterDetail() {
       if (activeTab === 'documents') {
         const { data } = await api.get(`/matters/${id}/documents`);
         setDocs(data.data);
-      } else if (activeTab === 'workflow') {
+      } else if (activeTab === 'tasks') {
         const [t, e] = await Promise.all([
           api.get(`/matters/${id}/tasks`),
           api.get(`/matters/${id}/events`)
@@ -50,15 +52,14 @@ export default function MatterDetail() {
         setTasks(t.data.data);
         setEvents(e.data.data);
       } else if (activeTab === 'parties') {
-        const [p, n] = await Promise.all([
-          api.get(`/matters/${id}/parties`),
-          api.get(`/matters/${id}/notes`)
-        ]);
-        setParties(p.data.data);
-        setNotes(n.data.data);
-      } else if (activeTab === 'litigation') {
-        const { data } = await api.get(`/matters/${id}/analytics`);
-        setAnalytics(data.data);
+        const { data } = await api.get(`/matters/${id}/parties`);
+        setParties(data.data);
+      } else if (activeTab === 'activity') {
+        const { data } = await api.get(`/matters/${id}/notes`);
+        setNotes(data.data);
+      } else if (activeTab === 'billing') {
+        const { data } = await api.get(`/matters/${id}/trust`);
+        setTrustHistory(data.data || []);
       }
     } catch (e) { console.error(e); }
   }
@@ -67,12 +68,12 @@ export default function MatterDetail() {
   if (!matter) return <Layout><div className="py-20 text-center text-crimson-600 font-bold">Matter not found.</div></Layout>;
 
   const TABS = [
-    { id: 'dashboard',  label: 'Dashboard',   icon: FolderOpen },
-    { id: 'documents',  label: 'Documents',   icon: FileText },
-    { id: 'workflow',   label: 'Workflow',    icon: Calendar },
-    { id: 'financials', label: 'Financials',  icon: DollarSign },
-    { id: 'parties',    label: 'Communication', icon: Users },
-    { id: 'litigation', label: 'Litigation & Analytics', icon: BarChart3 },
+    { id: 'dashboard', label: 'Dashboard',      icon: FolderOpen },
+    { id: 'parties',   label: 'Parties',        icon: Users },
+    { id: 'documents', label: 'Documents',      icon: FileText },
+    { id: 'tasks',     label: 'Tasks & Calendar', icon: Calendar },
+    { id: 'billing',   label: 'Time & Billing',  icon: DollarSign },
+    { id: 'activity',  label: 'Activity Log',   icon: History },
   ];
 
   return (
@@ -123,15 +124,15 @@ export default function MatterDetail() {
                     <div className="font-bold text-ink">{matter.partner_name || 'Not assigned'}</div>
                   </div>
                   <div>
-                    <div className="text-[10px] font-black uppercase tracking-widest text-ink/30 mb-1">Assigned Associate</div>
-                    <div className="font-bold text-ink">{matter.associate_name || 'Not assigned'}</div>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-ink/30 mb-1">Current Status</div>
+                    <div className="font-bold text-ink">{matter.status}</div>
                   </div>
                 </div>
               </div>
             </div>
             <div className="col-span-12 lg:col-span-4 space-y-6">
               <div className="card p-5 bg-ink text-parchment">
-                <h3 className="font-display font-bold text-lg mb-4 text-gold-500">Intake Compliance</h3>
+                <h3 className="font-display font-bold text-lg mb-4 text-gold-500">Compliance Status</h3>
                 <div className="space-y-4">
                   <div className="flex items-center gap-3">
                     <CheckCircle2 className="w-5 h-5 text-jade-500" />
@@ -139,14 +140,34 @@ export default function MatterDetail() {
                   </div>
                   <div className="flex items-center gap-3">
                     <CheckCircle2 className="w-5 h-5 text-jade-500" />
-                    <span className="text-sm font-bold">Client Onboarding Complete</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-jade-500" />
-                    <span className="text-sm font-bold">Terms of Engagement Signed</span>
+                    <span className="text-sm font-bold">Onboarding Complete</span>
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* --- PARTIES TAB --- */}
+        {activeTab === 'parties' && (
+          <div className="card">
+            <div className="px-5 py-4 border-b-2 border-ink/10 flex items-center justify-between">
+              <h3 className="font-display font-bold text-xl">Matter Parties Directory</h3>
+              <button className="btn-gold text-xs px-3 py-1.5"><Plus className="w-3 h-3" /> Add Party</button>
+            </div>
+            <div className="divide-y divide-ink/5">
+              {parties.length === 0 ? (
+                <div className="py-20 text-center text-ink/20 font-bold">No parties registered for this matter.</div>
+              ) : parties.map(p => (
+                <div key={p.id} className="p-4 flex items-center gap-4 hover:bg-gold-50/50 transition-colors">
+                  <div className="w-10 h-10 bg-gold-100 border border-gold-300 flex items-center justify-center text-gold-700 font-black text-sm">{p.name[0]}</div>
+                  <div>
+                    <div className="font-bold text-ink text-sm">{p.name}</div>
+                    <div className="text-[10px] font-black uppercase text-ink/40">{p.role}</div>
+                    {p.contact_info && <div className="text-xs text-ink/60 mt-0.5">{p.contact_info}</div>}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -155,7 +176,7 @@ export default function MatterDetail() {
         {activeTab === 'documents' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
-              <h2 className="font-display font-bold text-2xl">Document Repository</h2>
+              <h2 className="font-display font-bold text-2xl">Matter Documents</h2>
               <div className="flex gap-2">
                 <button className="btn-secondary text-xs px-3 py-1.5"><Mail className="w-3 h-3" /> Save Emails</button>
                 <button className="btn-gold text-xs px-3 py-1.5"><Plus className="w-3 h-3" /> Upload File</button>
@@ -169,7 +190,7 @@ export default function MatterDetail() {
                 <div className="col-span-2 text-right">Size</div>
               </div>
               {docs.length === 0 ? (
-                <div className="py-20 text-center text-ink/30 font-bold">No documents filed yet.</div>
+                <div className="py-20 text-center text-ink/30 font-bold">No documents filed in this matter.</div>
               ) : docs.map(d => (
                 <div key={d.id} className="grid grid-cols-12 gap-3 px-5 py-4 border-b border-ink/5 items-center hover:bg-gold-50/50 transition-colors cursor-pointer">
                   <div className="col-span-6 flex items-center gap-3">
@@ -185,17 +206,29 @@ export default function MatterDetail() {
           </div>
         )}
 
-        {/* --- WORKFLOW TAB --- */}
-        {activeTab === 'workflow' && (
+        {/* --- TASKS & CALENDAR TAB --- */}
+        {activeTab === 'tasks' && (
           <div className="grid grid-cols-12 gap-6">
             <div className="col-span-12 lg:col-span-7 space-y-6">
               <div className="card">
                 <div className="px-5 py-4 border-b-2 border-ink/10 flex items-center justify-between">
-                  <h3 className="font-display font-bold text-xl">Deadlines & Calendar</h3>
+                  <h3 className="font-display font-bold text-xl">Calendar & Deadlines</h3>
                   <button className="p-1 hover:bg-ink/5 rounded"><Plus className="w-4 h-4 text-gold-600" /></button>
                 </div>
                 <div className="divide-y divide-ink/5">
-                  {events.length === 0 ? <div className="p-10 text-center text-ink/20 font-bold">No upcoming deadlines</div> : events.map(e => (
+                  {matter.statute_of_limitations && (
+                    <div className="p-5 flex items-start gap-4 bg-crimson-50/50">
+                      <div className="w-12 h-12 bg-crimson-600 text-parchment flex flex-col items-center justify-center flex-shrink-0">
+                        <span className="text-[10px] font-black uppercase">SOL</span>
+                        <span className="text-xl font-display font-black leading-none">{new Date(matter.statute_of_limitations).getDate()}</span>
+                      </div>
+                      <div>
+                        <div className="font-bold text-crimson-900">Statute of Limitations</div>
+                        <div className="text-xs text-crimson-700 font-bold mt-1 uppercase tracking-widest">{new Date(matter.statute_of_limitations).toLocaleDateString()}</div>
+                      </div>
+                    </div>
+                  )}
+                  {events.length === 0 && !matter.statute_of_limitations ? <div className="p-10 text-center text-ink/20 font-bold">No upcoming deadlines</div> : events.map(e => (
                     <div key={e.id} className="p-5 flex items-start gap-4">
                       <div className="w-12 h-12 bg-ink text-parchment flex flex-col items-center justify-center flex-shrink-0">
                         <span className="text-[10px] font-black uppercase">{new Date(e.start_time).toLocaleString('default', { month: 'short' })}</span>
@@ -214,7 +247,7 @@ export default function MatterDetail() {
             <div className="col-span-12 lg:col-span-5 space-y-6">
               <div className="card">
                 <div className="px-5 py-4 border-b-2 border-ink/10 flex items-center justify-between">
-                  <h3 className="font-display font-bold text-xl">Task List</h3>
+                  <h3 className="font-display font-bold text-xl">Task Management</h3>
                   <button className="p-1 hover:bg-ink/5 rounded"><Plus className="w-4 h-4 text-gold-600" /></button>
                 </div>
                 <div className="p-2 space-y-1">
@@ -233,142 +266,100 @@ export default function MatterDetail() {
           </div>
         )}
 
-        {/* --- FINANCIALS TAB --- */}
-        {activeTab === 'financials' && (
+        {/* --- TIME & BILLING TAB --- */}
+        {activeTab === 'billing' && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <div className="card p-5 border-l-4 border-gold-500">
                 <div className="text-[10px] font-black uppercase tracking-widest text-ink/30 mb-1">Unbilled WIP</div>
                 <div className="text-2xl font-display font-black text-ink">{fmt(matter.unbilled_amount)}</div>
               </div>
-              <div className="card p-5 border-l-4 border-primary">
-                <div className="text-[10px] font-black uppercase tracking-widest text-ink/30 mb-1">Total Billed</div>
-                <div className="text-2xl font-display font-black text-ink">{fmt(0)}</div>
-              </div>
               <div className="card p-5 border-l-4 border-jade-500">
-                <div className="text-[10px] font-black uppercase tracking-widest text-ink/30 mb-1">Budget Utilization</div>
-                <div className="text-2xl font-display font-black text-ink">{matter.budget_amount ? `${Math.round((matter.unbilled_amount / matter.budget_amount) * 100)}%` : 'N/A'}</div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-ink/30 mb-1">Trust Balance</div>
+                <div className="text-2xl font-display font-black text-jade-600">{fmt(matter.trust_balance)}</div>
+              </div>
+              <div className="card p-5 border-l-4 border-ink">
+                <div className="text-[10px] font-black uppercase tracking-widest text-ink/30 mb-1">Budget Amount</div>
+                <div className="text-2xl font-display font-black text-ink">{fmt(matter.budget_amount)}</div>
+              </div>
+            </div>
+
+            {/* Matter Trust Ledger */}
+            <div className="card">
+              <div className="px-5 py-4 border-b-2 border-ink/10 flex items-center justify-between">
+                <h3 className="font-display font-bold text-xl flex items-center gap-2 text-jade-700">
+                  <Landmark className="w-5 h-5" /> Matter Trust Ledger
+                </h3>
+              </div>
+              <div className="bg-gold-50/50 p-4 border-b border-ink/5">
+                <p className="text-xs font-bold text-gold-800">Hard-Block Safeguard Active</p>
+                <p className="text-[10px] text-gold-700 mt-0.5 uppercase tracking-wide">Withdrawals exceeding K {parseFloat(matter.trust_balance).toFixed(2)} are restricted.</p>
+              </div>
+              <div className="divide-y divide-ink/5">
+                {trustHistory.length === 0 ? <div className="p-8 text-center text-ink/20 font-bold text-sm">No trust transactions recorded</div> : trustHistory.map(t => (
+                  <div key={t.id} className="grid grid-cols-12 gap-3 px-5 py-3 items-center">
+                    <div className="col-span-2 text-xs font-mono text-ink/40">{t.transaction_date}</div>
+                    <div className="col-span-1">
+                      {t.transaction_type === 'Deposit' ? <ArrowUpCircle className="w-4 h-4 text-jade-600" /> : <ArrowDownCircle className="w-4 h-4 text-crimson-600" />}
+                    </div>
+                    <div className="col-span-5 text-sm font-medium text-ink">{t.description}</div>
+                    <div className={`col-span-2 text-right font-mono font-bold ${t.transaction_type === 'Deposit' ? 'text-jade-600' : 'text-crimson-600'}`}>
+                      {t.transaction_type === 'Deposit' ? '+' : '-'} {fmt(Math.abs(t.amount))}
+                    </div>
+                    <div className="col-span-2 text-right font-mono font-black text-ink text-xs">{fmt(t.balance)}</div>
+                  </div>
+                ))}
               </div>
             </div>
 
             <div className="card">
               <div className="px-5 py-4 border-b-2 border-ink/10 flex items-center justify-between">
-                <h3 className="font-display font-bold text-xl">Recent Time Entries</h3>
+                <h3 className="font-display font-bold text-xl">Work in Progress & Reimbursables</h3>
                 <button className="btn-gold text-xs px-3 py-1.5"><Clock className="w-3 h-3" /> Record Time</button>
               </div>
               <div className="divide-y divide-ink/5">
-                {matter.time_entries?.length === 0 ? <div className="p-10 text-center text-ink/20 font-bold">No time recorded</div> : matter.time_entries?.slice(0,5).map(te => (
+                {matter.time_entries?.length === 0 ? <div className="p-10 text-center text-ink/20 font-bold">No time or expenses recorded</div> : matter.time_entries?.map(te => (
                   <div key={te.id} className="p-4 grid grid-cols-12 gap-3 items-center">
                     <div className="col-span-2 text-xs font-mono text-ink/40">{te.entry_date}</div>
                     <div className="col-span-6">
                       <div className="text-sm font-bold text-ink truncate">{te.description}</div>
-                      <div className="text-[10px] text-ink/40 font-medium">{te.user_name}</div>
+                      <div className="text-[10px] text-ink/40 font-medium uppercase tracking-widest">{te.user_name}</div>
                     </div>
                     <div className="col-span-2 text-center text-sm font-black">{te.hours}h</div>
                     <div className="col-span-2 text-right text-sm font-mono font-bold text-ink">{fmt(te.hours * te.hourly_rate)}</div>
                   </div>
                 ))}
               </div>
-              <div className="px-5 py-3 bg-ink/[0.02] border-t border-ink/5 text-center">
-                <Link to="/account" className="text-[10px] font-black uppercase tracking-widest text-gold-600 hover:text-gold-700">View Comprehensive Ledger →</Link>
-              </div>
             </div>
           </div>
         )}
 
-        {/* --- PARTIES TAB --- */}
-        {activeTab === 'parties' && (
-          <div className="grid grid-cols-12 gap-6">
-            <div className="col-span-12 lg:col-span-4 space-y-6">
-              <div className="card">
-                <div className="px-5 py-4 border-b-2 border-ink/10 flex items-center justify-between">
-                  <h3 className="font-display font-bold text-xl">Parties & Contacts</h3>
-                  <button className="p-1 hover:bg-ink/5 rounded"><Plus className="w-4 h-4 text-gold-600" /></button>
-                </div>
-                <div className="divide-y divide-ink/5">
-                  {parties.length === 0 ? <div className="p-10 text-center text-ink/20 font-bold">No parties listed</div> : parties.map(p => (
-                    <div key={p.id} className="p-4 flex items-center gap-4 hover:bg-gold-50/50 transition-colors">
-                      <div className="w-10 h-10 bg-gold-100 border border-gold-300 flex items-center justify-center text-gold-700 font-black text-sm">{p.name[0]}</div>
-                      <div>
-                        <div className="font-bold text-ink text-sm">{p.name}</div>
-                        <div className="text-[10px] font-black uppercase text-ink/40">{p.role}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+        {/* --- ACTIVITY LOG TAB --- */}
+        {activeTab === 'activity' && (
+          <div className="card">
+            <div className="px-5 py-4 border-b-2 border-ink/10 flex items-center justify-between">
+              <h3 className="font-display font-bold text-xl">Chronological Activity Log</h3>
+              <button className="btn-secondary text-xs px-3 py-1.5"><MessageSquare className="w-3 h-3" /> Add Entry</button>
             </div>
-            <div className="col-span-12 lg:col-span-8 space-y-6">
-              <div className="card">
-                <div className="px-5 py-4 border-b-2 border-ink/10 flex items-center justify-between">
-                  <h3 className="font-display font-bold text-xl">Activity Log & Notes</h3>
-                  <button className="btn-secondary text-xs px-3 py-1.5"><MessageSquare className="w-3 h-3" /> Add Note</button>
-                </div>
-                <div className="p-5 space-y-6">
-                  {notes.length === 0 ? <div className="py-10 text-center text-ink/20 font-bold">No activity logged</div> : notes.map(n => (
-                    <div key={n.id} className="flex gap-4">
-                      <div className="w-8 h-8 bg-ink/5 border border-ink/10 flex items-center justify-center flex-shrink-0"><History className="w-4 h-4 text-ink/30" /></div>
-                      <div>
-                        <div className="text-sm text-ink/80 leading-relaxed bg-parchment p-3 border-2 border-ink/5 relative after:absolute after:w-2 after:h-2 after:bg-parchment after:border-l-2 after:border-b-2 after:border-ink/5 after:-left-[5px] after:top-3 after:rotate-45">{n.content}</div>
-                        <div className="text-[10px] font-bold text-ink/30 mt-2 uppercase tracking-widest">{n.author_name} · {new Date(n.created_at).toLocaleString()}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* --- LITIGATION TAB --- */}
-        {activeTab === 'litigation' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="card p-6">
-                <h3 className="font-display font-bold text-xl mb-4 flex items-center gap-2"><Briefcase className="w-5 h-5 text-gold-600" /> Evidence & Trial Prep</h3>
-                <div className="space-y-3">
-                  {['Pleadings Bundle','Correspondence Log','Expert Evidence','Exhibits List','Witness Statements'].map(cat => (
-                    <div key={cat} className="flex items-center justify-between p-3 border-2 border-ink/5 hover:border-gold-500/30 transition-all cursor-pointer group">
-                      <span className="text-sm font-bold text-ink/70 group-hover:text-ink">{cat}</span>
-                      <ChevronLeft className="w-3 h-3 rotate-180 text-ink/20 group-hover:text-gold-600" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="card p-6 border-l-4 border-crimson-600">
-                <h3 className="font-display font-bold text-xl mb-4 flex items-center gap-2"><BarChart3 className="w-5 h-5 text-crimson-600" /> Matter Analytics</h3>
-                <div className="space-y-6">
-                  <div>
-                    <div className="flex justify-between text-xs font-black uppercase tracking-widest text-ink/40 mb-2">
-                      <span>Budget vs. Actual</span>
-                      <span>{analytics ? Math.round((matter.unbilled_amount / analytics.budget) * 100) : 0}%</span>
-                    </div>
-                    <div className="h-3 bg-ink/5 border border-ink/10 overflow-hidden">
-                      <div className="h-full bg-crimson-600" style={{ width: `${analytics ? Math.min(100, (matter.unbilled_amount / analytics.budget) * 100) : 0}%` }}></div>
-                    </div>
+            <div className="p-5 space-y-8">
+              {notes.length === 0 ? <div className="py-20 text-center text-ink/20 font-bold">No activity history for this matter.</div> : notes.map(n => (
+                <div key={n.id} className="flex gap-6 relative">
+                  <div className="w-10 h-10 bg-ink/5 border border-ink/10 flex items-center justify-center flex-shrink-0 z-10 rounded-sm">
+                    <History className="w-5 h-5 text-ink/30" />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-3 bg-jade-50 border-2 border-jade-600/20">
-                      <div className="text-[10px] font-black uppercase tracking-widest text-jade-700/50 mb-1">Realized Revenue</div>
-                      <div className="font-display font-black text-jade-700">{fmt(analytics?.realizedRevenue)}</div>
+                  <div className="flex-1">
+                    <div className="text-sm text-ink/80 leading-relaxed bg-parchment p-4 border-2 border-ink/5 rounded-sm shadow-sm relative
+                      after:absolute after:w-3 after:h-3 after:bg-parchment after:border-l-2 after:border-b-2 after:border-ink/5 after:-left-[7px] after:top-3 after:rotate-45">
+                      {n.content}
                     </div>
-                    <div className="p-3 bg-ink/5 border-2 border-ink/10">
-                      <div className="text-[10px] font-black uppercase tracking-widest text-ink/30 mb-1">Profit Margin</div>
-                      <div className="font-display font-black text-ink">{analytics?.realizedRevenue ? `${Math.round(((analytics.realizedRevenue - analytics.totalExpenses) / analytics.realizedRevenue) * 100)}%` : '0%'}</div>
+                    <div className="text-[10px] font-bold text-ink/30 mt-2 uppercase tracking-widest flex items-center gap-2">
+                      <span className="text-gold-600">{n.author_name}</span>
+                      <span>·</span>
+                      <span>{new Date(n.created_at).toLocaleString('en-PG', { dateStyle: 'long', timeStyle: 'short' })}</span>
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
-
-            <div className="card p-6 bg-crimson-50 border-2 border-crimson-600/20">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-display font-bold text-xl text-crimson-900">Matter Closure Protocols</h3>
-                  <p className="text-sm text-crimson-700 mt-1">Initiate final billing and document archiving procedures.</p>
-                </div>
-                <button className="btn-secondary border-crimson-600 text-crimson-700 hover:bg-crimson-100">Close Matter & Archive</button>
-              </div>
+              ))}
             </div>
           </div>
         )}
