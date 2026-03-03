@@ -1,25 +1,29 @@
-import { useState, useEffect } from 'react';
-import { Users, UserPlus, AlertCircle, Trash2, Key } from 'lucide-react';
-import Layout from '../components/Layout';
+import React, { useState, useEffect } from 'react';
+import { UserPlus, Trash2, Key, AlertCircle, Users, Edit } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import Layout from '../components/Layout';
 import api from '../utils/api';
 
 const ROLE_BADGE = {
-  Admin:     'bg-crimson-100 text-crimson-700 border-crimson-600',
-  Partner:   'bg-gold-100    text-gold-700    border-gold-600',
-  Associate: 'bg-jade-100    text-jade-700    border-jade-600',
-  Staff:     'bg-ink/10      text-ink         border-ink/40',
+  'Admin':     'bg-ink text-gold-500 border-ink',
+  'Partner':   'bg-gold-500 text-ink border-gold-600',
+  'Associate': 'bg-gold-100 text-gold-700 border-gold-300',
+  'Staff':     'bg-ink/5 text-ink/60 border-ink/10'
 };
 
 export default function Staff() {
-  const { user: me }              = useAuth();
-  const [staff,   setStaff]       = useState([]);
-  const [modal,   setModal]       = useState(false);
-  const [passModal, setPassModal] = useState(null); // stores user object
-  const [newPass, setNewPass]     = useState('');
-  const [form,    setForm]        = useState({ name: '', email: '', password: '', role: 'Associate', hourlyRate: '', annualSalary: '' });
+  const { user: me } = useAuth();
+  const [staff, setStaff]         = useState([]);
   const [loading, setLoading]     = useState(true);
-  const [error,   setError]       = useState('');
+  const [modal, setModal]         = useState(false);
+  const [editModal, setEditModal] = useState(null);
+  const [passModal, setPassModal] = useState(null);
+  const [form, setForm]           = useState({
+    name: '', email: '', password: '', role: 'Associate', hourlyRate: '', annualSalary: '',
+    designation: '', bankName: '', bankAccountNumber: '', bankAccountName: '', barDues: ''
+  });
+  const [newPass, setNewPass]     = useState('');
+  const [error, setError]         = useState('');
   const [success, setSuccess]     = useState('');
 
   useEffect(() => { load(); }, []);
@@ -62,15 +66,57 @@ export default function Staff() {
     e.preventDefault();
     setError(''); setSuccess(''); setLoading(true);
     try {
-      await api.post('/auth/register', { ...form, hourlyRate: parseFloat(form.hourlyRate || 0), annualSalary: parseFloat(form.annualSalary || 0) });
+      await api.post('/auth/register', {
+        ...form,
+        hourlyRate: parseFloat(form.hourlyRate || 0),
+        annualSalary: parseFloat(form.annualSalary || 0),
+        barDues: parseFloat(form.barDues || 0)
+      });
       setSuccess('Staff member created successfully.');
       setModal(false);
-      setForm({ name: '', email: '', password: '', role: 'Associate', hourlyRate: '', annualSalary: '' });
+      resetForm();
       load();
     } catch (e) {
       setError(e.response?.data?.message || e.message);
     } finally { setLoading(false); }
   }
+
+  async function updateUser(e) {
+    e.preventDefault();
+    setError(''); setSuccess(''); setLoading(true);
+    try {
+      await api.put(`/auth/users/${editModal.id}`, {
+        ...form,
+        hourlyRate: parseFloat(form.hourlyRate || 0),
+        annualSalary: parseFloat(form.annualSalary || 0),
+        barDues: parseFloat(form.barDues || 0)
+      });
+      setSuccess('Staff member updated successfully.');
+      setEditModal(null);
+      resetForm();
+      load();
+    } catch (e) {
+      setError(e.response?.data?.message || e.message);
+    } finally { setLoading(false); }
+  }
+
+  const resetForm = () => setForm({
+    name: '', email: '', password: '', role: 'Associate', hourlyRate: '', annualSalary: '',
+    designation: '', bankName: '', bankAccountNumber: '', bankAccountName: '', barDues: ''
+  });
+
+  const openEdit = (s) => {
+    setEditModal(s);
+    setForm({
+      name: s.name, email: s.email, role: s.role,
+      hourlyRate: s.hourly_rate, annualSalary: s.annual_salary,
+      designation: s.designation || '',
+      bankName: s.bank_name || '',
+      bankAccountNumber: s.bank_account_number || '',
+      bankAccountName: s.bank_account_name || '',
+      barDues: s.bar_dues || ''
+    });
+  };
 
   return (
     <Layout>
@@ -80,7 +126,7 @@ export default function Staff() {
           <p className="text-ink/50 font-medium mt-1">Team members and access management</p>
         </div>
         {me?.role === 'Admin' && (
-          <button onClick={() => setModal(true)} className="btn-gold">
+          <button onClick={() => { resetForm(); setModal(true); }} className="btn-gold">
             <UserPlus className="w-4 h-4" /> Add Staff
           </button>
         )}
@@ -112,6 +158,7 @@ export default function Staff() {
           <div key={s.id} className="grid grid-cols-12 gap-3 px-5 py-4 border-b border-ink/5 hover:bg-gold-50/50 transition-colors items-center">
             <div className="col-span-3">
               <div className="font-bold text-ink text-sm">{s.name}</div>
+              <div className="text-xs text-ink/40 font-medium">{s.designation || 'No designation'}</div>
               {s.id === me?.id && <div className="text-xs text-gold-600 font-bold">(You)</div>}
             </div>
             <div className="col-span-4 text-sm text-ink/60 font-medium truncate">{s.email}</div>
@@ -119,7 +166,7 @@ export default function Staff() {
               <span className={`badge ${ROLE_BADGE[s.role] || 'badge'}`}>{s.role}</span>
             </div>
             <div className="col-span-2 font-mono text-sm font-bold text-right text-ink/70">
-              {s.hourly_rate > 0 ? `K ${parseFloat(s.hourly_rate).toFixed(2)}/hr` : '—'}
+              {s.hourly_rate > 0 ? `K ${parseFloat(s.hourly_rate).toFixed(2)}/hr` : `Fixed K ${parseFloat(s.annual_salary).toLocaleString()}`}
             </div>
             <div className="col-span-1 text-center">
               <span className={`inline-block w-2 h-2 rounded-full ${s.is_active ? 'bg-jade-500' : 'bg-crimson-400'}`} />
@@ -127,19 +174,14 @@ export default function Staff() {
             <div className="col-span-1 text-right flex justify-end gap-1">
               {me?.role === 'Admin' && (
                 <>
-                  <button
-                    onClick={() => setPassModal(s)}
-                    className="p-2 text-ink/30 hover:text-gold-600 transition-colors"
-                    title="Reset Password"
-                  >
+                  <button onClick={() => openEdit(s)} className="p-2 text-ink/30 hover:text-gold-600 transition-colors" title="Edit Staff">
+                    <Edit className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => setPassModal(s)} className="p-2 text-ink/30 hover:text-gold-600 transition-colors" title="Reset Password">
                     <Key className="w-4 h-4" />
                   </button>
                   {s.id !== me?.id && (
-                    <button
-                      onClick={() => deleteUser(s.id)}
-                      className="p-2 text-ink/30 hover:text-crimson-600 transition-colors"
-                      title="Delete User"
-                    >
+                    <button onClick={() => deleteUser(s.id)} className="p-2 text-ink/30 hover:text-crimson-600 transition-colors" title="Delete User">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}
@@ -157,34 +199,48 @@ export default function Staff() {
         )}
       </div>
 
-      {/* Add Staff Modal */}
-      {modal && (
-        <div className="fixed inset-0 bg-ink/60 flex items-center justify-center z-50 p-4">
-          <div className="card w-full max-w-md p-6 animate-fadeIn">
-            <h3 className="font-display font-bold text-2xl text-ink mb-5">Add Staff Member</h3>
-            <form onSubmit={createUser} className="space-y-4">
-              <div>
-                <label className="label">Full Name</label>
-                <input type="text" required className="input" placeholder="e.g. Mary Kila"
-                  value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} />
+      {/* Staff Modal (Add/Edit) */}
+      {(modal || editModal) && (
+        <div className="fixed inset-0 bg-ink/60 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="card w-full max-w-2xl p-6 animate-fadeIn my-auto">
+            <h3 className="font-display font-bold text-2xl text-ink mb-5">{modal ? 'Add Staff Member' : 'Edit Staff Member'}</h3>
+            <form onSubmit={modal ? createUser : updateUser} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Full Name</label>
+                  <input type="text" required className="input" placeholder="e.g. Mary Kila"
+                    value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} />
+                </div>
+                <div>
+                  <label className="label">Email</label>
+                  <input type="email" required className="input" placeholder="mary@sasingianlawyers.com"
+                    value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} disabled={!!editModal} />
+                </div>
               </div>
-              <div>
-                <label className="label">Email</label>
-                <input type="email" required className="input" placeholder="mary@sasingianlawyers.com"
-                  value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} />
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Designation</label>
+                  <input type="text" className="input" placeholder="e.g. Senior Associate"
+                    value={form.designation} onChange={e => setForm(f => ({...f, designation: e.target.value}))} />
+                </div>
+                <div>
+                  <label className="label">Role</label>
+                  <select className="input" value={form.role} onChange={e => setForm(f => ({...f, role: e.target.value}))}>
+                    {['Admin','Partner','Associate','Staff'].map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="label">Temporary Password</label>
-                <input type="password" required minLength={8} className="input" placeholder="Min 8 characters"
-                  value={form.password} onChange={e => setForm(f => ({...f, password: e.target.value}))} />
-              </div>
-              <div>
-                <label className="label">Role</label>
-                <select className="input" value={form.role} onChange={e => setForm(f => ({...f, role: e.target.value}))}>
-                  {['Admin','Partner','Associate','Staff'].map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+
+              {modal && (
+                <div>
+                  <label className="label">Temporary Password</label>
+                  <input type="password" required minLength={8} className="input" placeholder="Min 8 characters"
+                    value={form.password} onChange={e => setForm(f => ({...f, password: e.target.value}))} />
+                </div>
+              )}
+
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="label">Hourly Rate (K)</label>
                   <input type="number" min="0" step="0.01" className="input font-mono" placeholder="0.00"
@@ -195,11 +251,38 @@ export default function Staff() {
                   <input type="number" min="0" step="0.01" className="input font-mono" placeholder="0.00"
                     value={form.annualSalary} onChange={e => setForm(f => ({...f, annualSalary: e.target.value}))} />
                 </div>
+                <div>
+                  <label className="label">Bar Dues (K/period)</label>
+                  <input type="number" min="0" step="0.01" className="input font-mono" placeholder="0.00"
+                    value={form.barDues} onChange={e => setForm(f => ({...f, barDues: e.target.value}))} />
+                </div>
               </div>
+
+              <div className="pt-4 border-t-2 border-ink/5">
+                <h4 className="text-xs font-black uppercase tracking-widest text-ink/40 mb-3">Bank Details</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <label className="label">Bank Account Name</label>
+                    <input type="text" className="input" placeholder="e.g. MARY KILA"
+                      value={form.bankAccountName} onChange={e => setForm(f => ({...f, bankAccountName: e.target.value}))} />
+                  </div>
+                  <div>
+                    <label className="label">Bank Name</label>
+                    <input type="text" className="input" placeholder="e.g. BSP"
+                      value={form.bankName} onChange={e => setForm(f => ({...f, bankName: e.target.value}))} />
+                  </div>
+                  <div>
+                    <label className="label">Account Number</label>
+                    <input type="text" className="input" placeholder="e.g. 1001234567"
+                      value={form.bankAccountNumber} onChange={e => setForm(f => ({...f, bankAccountNumber: e.target.value}))} />
+                  </div>
+                </div>
+              </div>
+
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => { setModal(false); setError(''); }} className="btn-secondary flex-1 justify-center">Cancel</button>
+                <button type="button" onClick={() => { setModal(false); setEditModal(null); setError(''); }} className="btn-secondary flex-1 justify-center">Cancel</button>
                 <button type="submit" disabled={loading} className="btn-gold flex-1 justify-center">
-                  {loading ? 'Creating…' : 'Create User'}
+                  {loading ? 'Saving…' : (modal ? 'Create User' : 'Update User')}
                 </button>
               </div>
             </form>
