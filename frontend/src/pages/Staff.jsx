@@ -1,26 +1,24 @@
 import { useState, useEffect } from 'react';
-import { Users, UserPlus, AlertCircle, Trash2, Key } from 'lucide-react';
+import { Users, UserPlus, Key, Trash2, AlertCircle, Briefcase, CreditCard, FileText } from 'lucide-react';
 import Layout from '../components/Layout';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 
-const ROLE_BADGE = {
-  Admin:     'bg-crimson-100 text-crimson-700 border-crimson-600',
-  Partner:   'bg-gold-100    text-gold-700    border-gold-600',
-  Associate: 'bg-jade-100    text-jade-700    border-jade-600',
-  Staff:     'bg-ink/10      text-ink         border-ink/40',
-};
+const ROLE_BADGE = { Admin:'badge-pending', Partner:'badge-open', Associate:'badge-hold', Staff:'badge-closed' };
 
 export default function Staff() {
-  const { user: me }              = useAuth();
-  const [staff,   setStaff]       = useState([]);
-  const [modal,   setModal]       = useState(false);
-  const [passModal, setPassModal] = useState(null); // stores user object
-  const [newPass, setNewPass]     = useState('');
-  const [form,    setForm]        = useState({ name: '', email: '', password: '', role: 'Associate', hourlyRate: '', annualSalary: '' });
-  const [loading, setLoading]     = useState(true);
-  const [error,   setError]       = useState('');
-  const [success, setSuccess]     = useState('');
+  const { user: me } = useAuth();
+  const [staff,   setStaff]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal,   setModal]   = useState(false);
+  const [passModal, setPassModal] = useState(null);
+  const [newPass, setNewPass] = useState('');
+  const [form,    setForm]    = useState({
+    name: '', email: '', password: '', role: 'Associate',
+    hourlyRate: '', annualSalary: '', designation: '', bank_details: '', tin_number: ''
+  });
+  const [error,   setError]   = useState('');
+  const [success, setSuccess] = useState('');
 
   useEffect(() => { load(); }, []);
 
@@ -62,10 +60,14 @@ export default function Staff() {
     e.preventDefault();
     setError(''); setSuccess(''); setLoading(true);
     try {
-      await api.post('/auth/register', { ...form, hourlyRate: parseFloat(form.hourlyRate || 0), annualSalary: parseFloat(form.annualSalary || 0) });
+      await api.post('/auth/register', {
+        ...form,
+        hourlyRate: parseFloat(form.hourlyRate || 0),
+        annualSalary: parseFloat(form.annualSalary || 0)
+      });
       setSuccess('Staff member created successfully.');
       setModal(false);
-      setForm({ name: '', email: '', password: '', role: 'Associate', hourlyRate: '', annualSalary: '' });
+      setForm({ name: '', email: '', password: '', role: 'Associate', hourlyRate: '', annualSalary: '', designation: '', bank_details: '', tin_number: '' });
       load();
     } catch (e) {
       setError(e.response?.data?.message || e.message);
@@ -94,7 +96,7 @@ export default function Staff() {
         </div>
       )}
 
-      <div className="card">
+      <div className="card overflow-hidden">
         <div className="grid grid-cols-12 gap-3 px-5 py-3 border-b-2 border-ink/10 bg-ink/[0.03]">
           {['Name', 'Email', 'Role', 'Hourly Rate', 'Status', ''].map((h, i) => (
             <div key={i} className={`text-xs font-black uppercase tracking-widest text-ink/50
@@ -113,6 +115,7 @@ export default function Staff() {
             <div className="col-span-3">
               <div className="font-bold text-ink text-sm">{s.name}</div>
               {s.id === me?.id && <div className="text-xs text-gold-600 font-bold">(You)</div>}
+              {s.designation && <div className="text-[10px] uppercase font-black tracking-widest text-ink/40">{s.designation}</div>}
             </div>
             <div className="col-span-4 text-sm text-ink/60 font-medium truncate">{s.email}</div>
             <div className="col-span-2">
@@ -159,32 +162,46 @@ export default function Staff() {
 
       {/* Add Staff Modal */}
       {modal && (
-        <div className="fixed inset-0 bg-ink/60 flex items-center justify-center z-50 p-4">
-          <div className="card w-full max-w-md p-6 animate-fadeIn">
+        <div className="fixed inset-0 bg-ink/60 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="card w-full max-w-2xl p-6 animate-fadeIn my-auto">
             <h3 className="font-display font-bold text-2xl text-ink mb-5">Add Staff Member</h3>
-            <form onSubmit={createUser} className="space-y-4">
-              <div>
-                <label className="label">Full Name</label>
-                <input type="text" required className="input" placeholder="e.g. Mary Kila"
-                  value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} />
+            <form onSubmit={createUser} className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Full Name</label>
+                  <input type="text" required className="input" placeholder="Mary Kila"
+                    value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} />
+                </div>
+                <div>
+                  <label className="label">Email</label>
+                  <input type="email" required className="input" placeholder="mary@sasingianlawyers.com"
+                    value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} />
+                </div>
               </div>
-              <div>
-                <label className="label">Email</label>
-                <input type="email" required className="input" placeholder="mary@sasingianlawyers.com"
-                  value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} />
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Temporary Password</label>
+                  <input type="password" required minLength={8} className="input" placeholder="Min 8 characters"
+                    value={form.password} onChange={e => setForm(f => ({...f, password: e.target.value}))} />
+                </div>
+                <div>
+                  <label className="label">Designation / Job Title</label>
+                  <div className="relative">
+                    <Briefcase className="absolute left-3 top-3 w-4 h-4 text-ink/30" />
+                    <input type="text" className="input pl-10" placeholder="e.g. Senior Associate"
+                      value={form.designation} onChange={e => setForm(f => ({...f, designation: e.target.value}))} />
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="label">Temporary Password</label>
-                <input type="password" required minLength={8} className="input" placeholder="Min 8 characters"
-                  value={form.password} onChange={e => setForm(f => ({...f, password: e.target.value}))} />
-              </div>
-              <div>
-                <label className="label">Role</label>
-                <select className="input" value={form.role} onChange={e => setForm(f => ({...f, role: e.target.value}))}>
-                  {['Admin','Partner','Associate','Staff'].map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="label">Role</label>
+                  <select className="input" value={form.role} onChange={e => setForm(f => ({...f, role: e.target.value}))}>
+                    {['Admin','Partner','Associate','Staff'].map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
                 <div>
                   <label className="label">Hourly Rate (K)</label>
                   <input type="number" min="0" step="0.01" className="input font-mono" placeholder="0.00"
@@ -196,10 +213,30 @@ export default function Staff() {
                     value={form.annualSalary} onChange={e => setForm(f => ({...f, annualSalary: e.target.value}))} />
                 </div>
               </div>
-              <div className="flex gap-3 pt-2">
+
+              <div className="border-t-2 border-ink/5 pt-5 grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Bank Details</label>
+                  <div className="relative">
+                    <CreditCard className="absolute left-3 top-3 w-4 h-4 text-ink/30" />
+                    <textarea rows="2" className="input pl-10" placeholder="Bank Name, Account #, BSB"
+                      value={form.bank_details} onChange={e => setForm(f => ({...f, bank_details: e.target.value}))}></textarea>
+                  </div>
+                </div>
+                <div>
+                  <label className="label">IRC TIN Number</label>
+                  <div className="relative">
+                    <FileText className="absolute left-3 top-3 w-4 h-4 text-ink/30" />
+                    <input type="text" className="input pl-10" placeholder="e.g. 100123456"
+                      value={form.tin_number} onChange={e => setForm(f => ({...f, tin_number: e.target.value}))} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-4">
                 <button type="button" onClick={() => { setModal(false); setError(''); }} className="btn-secondary flex-1 justify-center">Cancel</button>
                 <button type="submit" disabled={loading} className="btn-gold flex-1 justify-center">
-                  {loading ? 'Creating…' : 'Create User'}
+                  {loading ? 'Creating…' : 'Create User Profile'}
                 </button>
               </div>
             </form>

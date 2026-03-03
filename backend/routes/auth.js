@@ -142,4 +142,57 @@ router.get('/users', authenticate, authorize('Admin', 'Partner'), async (req, re
   }
 });
 
+/* ── GET /api/auth/users/:id/productivity ─────────────────── */
+router.get('/users/:id/productivity', authenticate, authorize('Admin','Partner'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ success: false, message: 'startDate and endDate are required.' });
+    }
+
+    const { rows } = await query(
+      `SELECT
+         COUNT(id) as entries_count,
+         SUM(hours) as total_hours,
+         SUM(hours * hourly_rate) as total_billable_value
+       FROM time_entries
+       WHERE user_id = $1 AND entry_date >= $2 AND entry_date <= $3`,
+      [id, startDate, endDate]
+    );
+
+    const userRes = await query('SELECT name, role, hourly_rate, annual_salary FROM users WHERE id = $1', [id]);
+    if (!userRes.rows.length) return res.status(404).json({ success: false, message: 'User not found.' });
+    const user = userRes.rows[0];
+
+    const stats = rows[0];
+    const totalHours = parseFloat(stats.total_hours || 0);
+    const billableValue = parseFloat(stats.total_billable_value || 0);
+
+    // Simple Productivity Score: Billable Value vs. Estimated Cost
+    const periodDays = (new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24);
+    const estimatedCost = (user.annual_salary / 365) * periodDays;
+    const score = estimatedCost > 0 ? (billableValue / estimatedCost).toFixed(2) : (billableValue > 0 ? 'N/A' : 0);
+
+    res.json({
+      success: true,
+      data: {
+        userName: user.name,
+        role: user.role,
+        period: { startDate, endDate },
+        stats: {
+          entriesCount: parseInt(stats.entries_count),
+          totalHours,
+          billableValue,
+          estimatedCost: Math.round(estimatedCost * 100) / 100,
+          productivityScore: score
+        }
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 export default router;
