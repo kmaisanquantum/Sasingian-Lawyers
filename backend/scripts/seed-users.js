@@ -6,7 +6,14 @@
 import bcrypt from 'bcryptjs';
 import pg     from 'pg';
 import dotenv from 'dotenv';
+import { spawnSync } from 'child_process';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const { Pool } = pg;
 const pool = new Pool({
@@ -45,7 +52,19 @@ async function seed () {
     console.log(rowCount ? `  ✅  ${u.email}` : `  ⚠️  failed to update: ${u.email}`);
   }
   console.log('\n✅  Done.  Change passwords after first login!\n');
-  await pool.end();
 }
 
-seed().catch(err => { console.error('Seed failed:', err); process.exit(1); });
+async function runMigration() {
+  console.log('\n🔄 Checking for migrations...');
+  const result = spawnSync('node', [path.join(__dirname, 'apply-migration.js')], { stdio: 'inherit' });
+  if (result.error) {
+    console.error('Migration failed:', result.error);
+  }
+}
+
+seed().then(runMigration).catch(err => {
+  console.error('Seed failed:', err);
+  process.exit(1);
+}).finally(() => {
+  pool.end();
+});

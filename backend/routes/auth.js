@@ -53,15 +53,20 @@ router.post('/register',
     if (!errors.isEmpty()) return res.status(400).json({ success: false, errors: errors.array() });
 
     try {
-      const { name, email, password, role, hourlyRate = 0, annualSalary = 0 } = req.body;
+      const {
+        name, email, password, role, hourlyRate = 0, annualSalary = 0,
+        designation, bankName, bankAccountNumber, bankAccountName, barDues = 0
+      } = req.body;
       const exists = await query('SELECT id FROM users WHERE email = $1', [email]);
       if (exists.rows.length) return res.status(400).json({ success: false, message: 'Email already exists.' });
 
       const hash = await bcrypt.hash(password, 10);
       const { rows } = await query(
-        `INSERT INTO users (name, email, password_hash, role, hourly_rate, annual_salary)
-         VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, name, email, role`,
-        [name, email, hash, role, hourlyRate, annualSalary]
+        `INSERT INTO users (
+          name, email, password_hash, role, hourly_rate, annual_salary,
+          designation, bank_name, bank_account_number, bank_account_name, bar_dues
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id, name, email, role`,
+        [name, email, hash, role, hourlyRate, annualSalary, designation, bankName, bankAccountNumber, bankAccountName, barDues]
       );
       res.status(201).json({ success: true, data: { user: rows[0] } });
     } catch (err) {
@@ -130,11 +135,45 @@ router.delete('/users/:id', authenticate, authorize('Admin'), async (req, res) =
   }
 });
 
+/* ── PUT /api/auth/users/:id (Admin/Partner only) ─────────── */
+router.put('/users/:id', authenticate, authorize('Admin', 'Partner'),
+  async (req, res) => {
+    try {
+      const {
+        name, role, hourlyRate, annualSalary, designation,
+        bankName, bankAccountNumber, bankAccountName, barDues, is_active
+      } = req.body;
+
+      const { rows } = await query(
+        `UPDATE users SET
+          name = COALESCE($1, name),
+          role = COALESCE($2, role),
+          hourly_rate = COALESCE($3, hourly_rate),
+          annual_salary = COALESCE($4, annual_salary),
+          designation = COALESCE($5, designation),
+          bank_name = COALESCE($6, bank_name),
+          bank_account_number = COALESCE($7, bank_account_number),
+          bank_account_name = COALESCE($8, bank_account_name),
+          bar_dues = COALESCE($9, bar_dues),
+          is_active = COALESCE($10, is_active),
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $11 RETURNING *`,
+        [name, role, hourlyRate, annualSalary, designation, bankName, bankAccountNumber, bankAccountName, barDues, is_active, req.params.id]
+      );
+
+      if (!rows.length) return res.status(404).json({ success: false, message: 'User not found.' });
+      res.json({ success: true, data: rows[0] });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+);
+
 /* ── GET /api/auth/users  (Admin/Partner) ─────────────────────── */
 router.get('/users', authenticate, authorize('Admin', 'Partner'), async (req, res) => {
   try {
     const { rows } = await query(
-      'SELECT id, name, email, role, hourly_rate, annual_salary, is_active, created_at FROM users ORDER BY name'
+      'SELECT * FROM users ORDER BY name'
     );
     res.json({ success: true, data: rows });
   } catch (err) {
