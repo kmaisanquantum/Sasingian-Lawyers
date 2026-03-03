@@ -357,7 +357,6 @@ JOIN clients c ON m.client_id = c.id
 LEFT JOIN invoices i ON m.id = i.matter_id AND i.status != 'Cancelled'
 GROUP BY m.id, m.case_number, m.matter_name, c.client_name;
 
-GROUP BY u.id, u.name, u.role, u.hourly_rate;
 
 CREATE OR REPLACE VIEW vw_work_in_progress AS
 SELECT
