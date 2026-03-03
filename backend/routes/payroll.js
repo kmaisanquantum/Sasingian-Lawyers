@@ -1,6 +1,6 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
-import { query } from '../config/database.js';
+import { query, transaction } from '../config/database.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import PNGPayrollCalculator from '../utils/pngPayroll.js';
 
@@ -59,20 +59,33 @@ router.post('/process', authorize('Admin'),
 
       const r = calc.calculate(grossPay, payFrequency, allowances, overtimePay, otherDeductions);
 
-      const { rows } = await query(
-        `INSERT INTO payroll
-           (staff_id, pay_period_start, pay_period_end, pay_frequency,
-            gross_pay, overtime_pay, allowances, total_earnings,
-            swt_tax, employee_super, employer_super, other_deductions,
-            total_deductions, net_pay, created_by, notes)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
-         RETURNING *`,
-        [staffId, payPeriodStart, payPeriodEnd, payFrequency,
-         r.grossPay, r.overtimePay, r.allowances, r.totalEarnings,
-         r.swtTax, r.employeeSuper, r.employerSuper, r.otherDeductions,
-         r.totalDeductions, r.netPay, req.user.id, notes]
-      );
-      res.status(201).json({ success: true, data: { payroll: rows[0], calculation: r } });
+      const result = await transaction(async (client) => {
+        const { rows } = await client.query(
+          `INSERT INTO payroll
+             (staff_id, pay_period_start, pay_period_end, pay_frequency,
+              gross_pay, overtime_pay, allowances, total_earnings,
+              swt_tax, employee_super, employer_super, other_deductions,
+              total_deductions, net_pay, created_by, notes)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+           RETURNING *`,
+          [staffId, payPeriodStart, payPeriodEnd, payFrequency,
+           r.grossPay, r.overtimePay, r.allowances, r.totalEarnings,
+           r.swtTax, r.employeeSuper, r.employerSuper, r.otherDeductions,
+           r.totalDeductions, r.netPay, req.user.id, notes]
+        );
+        const payrollRecord = rows[0];
+
+        // Digital Archive: Save record in user_documents
+        await client.query(
+          `INSERT INTO user_documents (user_id, category, file_name, file_path, uploaded_by)
+           VALUES ($1, 'Payslip', $2, $3, $4)`,
+          [staffId, `Payslip_${payPeriodEnd}.pdf`, `/archive/payroll/${payrollRecord.id}.pdf`, req.user.id]
+        );
+
+        return payrollRecord;
+      });
+
+      res.status(201).json({ success: true, data: { payroll: result, calculation: r } });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
     }
@@ -107,16 +120,41 @@ router.put('/:id/status', authorize('Admin'),
 
     try {
       const { status, paymentDate } = req.body;
-      const set = ['status = $1'];
-      const vals = [status];
-      let n = 2;
-      if (status === 'Paid' && paymentDate) { set.push(`payment_date = $${n++}`); vals.push(paymentDate); }
-      vals.push(req.params.id);
-      const { rows } = await query(
-        `UPDATE payroll SET ${set.join(', ')} WHERE id = $${n} RETURNING *`, vals
-      );
-      if (!rows.length) return res.status(404).json({ success: false, message: 'Record not found.' });
-      res.json({ success: true, data: rows[0] });
+
+      const result = await transaction(async (client) => {
+        const set = ['status = $1'];
+        const vals = [status];
+        let n = 2;
+        if (status === 'Paid' && paymentDate) { set.push(`payment_date = $${n++}`); vals.push(paymentDate); }
+        vals.push(req.params.id);
+
+        const { rows } = await client.query(
+          `UPDATE payroll SET ${set.join(', ')} WHERE id = $${n} RETURNING *`, vals
+        );
+        if (!rows.length) throw new Error('Record not found.');
+        const payroll = rows[0];
+
+        // Automate Ledger Entry if Paid
+        if (status === 'Paid') {
+          const { rows: staff } = await client.query('SELECT name FROM users WHERE id = $1', [payroll.staff_id]);
+          const staffName = staff[0]?.name || 'Staff';
+
+          const balRes = await client.query('SELECT balance FROM firm_operating_ledger ORDER BY created_at DESC LIMIT 1');
+          const currentBal = parseFloat(balRes.rows[0]?.balance || 0);
+          const totalOutflow = parseFloat(payroll.net_pay) + parseFloat(payroll.employer_super) + parseFloat(payroll.swt_tax);
+          // Note: Firm pays Net Pay + SWT (to IRC) + Super (to fund). Total cost to firm.
+
+          await client.query(
+            `INSERT INTO firm_operating_ledger (transaction_date, category, amount, balance, description, reference_number, created_by)
+             VALUES ($1, 'Salary', $2, $3, $4, $5, $6)`,
+            [paymentDate || new Date().toISOString().split('T')[0], 'Salary', -totalOutflow, currentBal - totalOutflow,
+             `Payroll Payment - ${staffName} (Period ending ${payroll.pay_period_end})`, `PAY-${payroll.id.substring(0,8)}`, req.user.id]
+          );
+        }
+        return payroll;
+      });
+
+      res.json({ success: true, data: result });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
     }
@@ -170,6 +208,77 @@ router.get('/report/annual', authorize('Admin','Partner'), async (req, res) => {
       [year]
     );
     res.json({ success: true, data: { year: parseInt(year), staff: rows } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/* ── GET /api/payroll/staff/:staffId/pay-data ─────────────────── */
+router.get('/staff/:staffId/pay-data', authorize('Admin','Partner'), async (req, res) => {
+  try {
+    const { staffId } = req.params;
+    const { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ success: false, message: 'startDate and endDate are required.' });
+    }
+
+    // 1. Fetch User Profile
+    const userRes = await query('SELECT id, name, role, hourly_rate, annual_salary, designation FROM users WHERE id = $1', [staffId]);
+    if (!userRes.rows.length) return res.status(404).json({ success: false, message: 'Staff not found.' });
+    const user = userRes.rows[0];
+
+    // 2. Calculate Gross Pay from Timesheets (if hourly)
+    let timesheetEarnings = 0;
+    let billableHours = 0;
+    if (user.hourly_rate > 0) {
+      const tsRes = await query(
+        `SELECT SUM(hours) as total_hours, SUM(hours * hourly_rate) as total_earnings
+         FROM time_entries
+         WHERE user_id = $1 AND entry_date >= $2 AND entry_date <= $3`,
+        [staffId, startDate, endDate]
+      );
+      billableHours     = parseFloat(tsRes.rows[0]?.total_hours    || 0);
+      timesheetEarnings = parseFloat(tsRes.rows[0]?.total_earnings || 0);
+    }
+
+    // 3. Calculate Unpaid Leave Deductions
+    const leaveRes = await query(
+      `SELECT SUM(days_requested) as unpaid_days
+       FROM leave_requests
+       WHERE staff_id = $1 AND status = 'Approved' AND leave_type = 'Unpaid'
+         AND start_date >= $2 AND end_date <= $3`,
+      [staffId, startDate, endDate]
+    );
+    const unpaidDays = parseFloat(leaveRes.rows[0]?.unpaid_days || 0);
+    // Assuming 260 working days per year for salary deduction calculation
+    const dailyRate = user.annual_salary > 0 ? (user.annual_salary / 260) : 0;
+    const leaveDeduction = Math.round(unpaidDays * dailyRate * 100) / 100;
+
+    // 4. Mandatory Deductions (e.g. Bar Dues for Legal Staff)
+    let mandatoryDeductions = 0;
+    const legalRoles = ['Partner', 'Associate'];
+    if (legalRoles.includes(user.role)) {
+      mandatoryDeductions = 50.00; // Placeholder for Bar Dues
+    }
+
+    res.json({
+      success: true,
+      data: {
+        staffId: user.id,
+        name: user.name,
+        designation: user.designation,
+        role: user.role,
+        baseAnnualSalary: parseFloat(user.annual_salary),
+        hourlyRate: parseFloat(user.hourly_rate),
+        billableHours,
+        timesheetEarnings,
+        unpaidDays,
+        leaveDeduction,
+        mandatoryDeductions,
+        suggestedGrossPay: user.hourly_rate > 0 ? timesheetEarnings : (user.annual_salary / 26) // Fortnightly default
+      }
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
