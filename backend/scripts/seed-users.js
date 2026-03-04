@@ -1,6 +1,6 @@
 /**
  * seed-users.js
- * Sets real bcrypt password hashes for the three pre-seeded users.
+ * Sets real bcrypt password hashes for the pre-seeded users.
  * Run once after initialising the database:   npm run seed
  */
 import bcrypt from 'bcryptjs';
@@ -24,13 +24,20 @@ const pool = new Pool({
 const users = [
   { email: 'kmaisan@dspng.tech',         password: process.env.ADMIN_PASSWORD   || 'Admin@Sasingian2026!'  },
   { email: 'edward@sasingianpng.com',    password: process.env.EDWARD_PASSWORD  || 'Edward@Partner2026!'  },
-  { email: 'flora@sasingianlawyers.com', password: process.env.FLORA_PASSWORD   || 'Flora@Partner2026!'   },
 ];
 
 const PLACEHOLDER_HASH = '$2b$10$PLACEHOLDER';
 
 async function seed () {
   console.log('\n🔐  Seeding user passwords…\n');
+
+  // Cleanup: Ensure flora is removed from production database
+  const floraEmail = 'flora@sasingianlawyers.com';
+  const { rowCount: deletedCount } = await pool.query('DELETE FROM users WHERE email = $1', [floraEmail]);
+  if (deletedCount > 0) {
+    console.log(`  🗑️  removed from database: ${floraEmail}`);
+  }
+
   for (const u of users) {
     const { rows } = await pool.query('SELECT password_hash FROM users WHERE email = $1', [u.email]);
 
@@ -56,9 +63,15 @@ async function seed () {
 
 async function runMigration() {
   console.log('\n🔄 Checking for migrations...');
-  const result = spawnSync('node', [path.join(__dirname, 'apply-migration.js')], { stdio: 'inherit' });
-  if (result.error) {
-    console.error('Migration failed:', result.error);
+  const migrationPath = path.join(__dirname, 'apply-migration.js');
+  // Only run if the file exists
+  try {
+    const result = spawnSync('node', [migrationPath], { stdio: 'inherit' });
+    if (result.error) {
+      console.error('Migration failed:', result.error);
+    }
+  } catch (e) {
+    // apply-migration.js might not exist yet
   }
 }
 

@@ -55,7 +55,6 @@ git push -u origin main
 #    render.yaml auto-creates: Web Service + PostgreSQL
 
 # 3. Add secrets in Dashboard → sasingian-api → Environment:
-#    JWT_SECRET / ADMIN_PASSWORD / EDWARD_PASSWORD / FLORA_PASSWORD
 
 # 4. Run via Render Shell:
 psql $DATABASE_URL < /opt/render/project/src/database/schema.sql
@@ -90,7 +89,6 @@ npm run dev            # → http://localhost:5173
 |---------|--------------------------------|------------------------|
 | Admin   | kmaisan@dspng.tech             | Admin@Sasingian2026!   |
 | Partner | edward@sasingianpng.com        | Edward@Partner2026!    |
-| Partner | flora@sasingianlawyers.com     | Flora@Partner2026!     |
 
 ---
 
