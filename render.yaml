@@ -65,8 +65,6 @@ services:
       - key: EDWARD_PASSWORD
         sync: false
 
-      - key: FLORA_PASSWORD
-        sync: false
 
   # ── Managed PostgreSQL ───────────────────────────────────────
 databases:
