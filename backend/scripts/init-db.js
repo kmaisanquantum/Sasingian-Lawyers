@@ -1,4 +1,9 @@
 import pg     from 'pg';
+if (process.env.RENDER_BUILD_ID) {
+  console.log('🏗️  Render build detected. Skipping database initialization.');
+  process.exit(0);
+}
+
 import fs     from 'fs';
 import path   from 'path';
 import { fileURLToPath } from 'url';
@@ -33,5 +38,6 @@ async function initDb() {
 
 initDb().catch(err => {
   console.error('Database initialization failed:', err);
-  process.exit(1);
+  // Exit with 0 to allow application boot even if DB init fails (e.g. during pre-boot checks)
+  process.exit(0);
 });

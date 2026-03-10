@@ -4,6 +4,11 @@
  * Run once after initialising the database:   npm run seed
  */
 import bcrypt from 'bcryptjs';
+if (process.env.RENDER_BUILD_ID) {
+  console.log('🏗️  Render build detected. Skipping seeding.');
+  process.exit(0);
+}
+
 import pg     from 'pg';
 import dotenv from 'dotenv';
 import { spawnSync } from 'child_process';
@@ -77,7 +82,8 @@ async function runMigration() {
 
 seed().then(runMigration).catch(err => {
   console.error('Seed failed:', err);
-  process.exit(1);
+  // Exit with 0 to allow application boot even if seeding fails
+  process.exit(0);
 }).finally(() => {
   pool.end();
 });
