@@ -1,4 +1,9 @@
 import pg     from 'pg';
+if (process.env.RENDER_BUILD_ID) {
+  console.log('🏗️  Render build detected. Skipping database initialization.');
+  process.exit(0);
+}
+
 import fs     from 'fs';
 import path   from 'path';
 import { fileURLToPath } from 'url';

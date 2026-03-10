@@ -4,6 +4,11 @@
  * Run once after initialising the database:   npm run seed
  */
 import bcrypt from 'bcryptjs';
+if (process.env.RENDER_BUILD_ID) {
+  console.log('🏗️  Render build detected. Skipping seeding.');
+  process.exit(0);
+}
+
 import pg     from 'pg';
 import dotenv from 'dotenv';
 import { spawnSync } from 'child_process';
