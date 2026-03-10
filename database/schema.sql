@@ -64,9 +64,13 @@ CREATE TABLE IF NOT EXISTS matters (
     budget_amount         DECIMAL(12,2),
     archived_at           TIMESTAMP,
     statute_of_limitations DATE,
+    metadata              JSONB DEFAULT '{}'::jsonb,
     created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Ensure metadata column exists for existing installations
+ALTER TABLE matters ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
 
 -- ----------------------------------------------------------------
 -- TIME ENTRIES

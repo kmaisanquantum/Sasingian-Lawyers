@@ -123,11 +123,11 @@ router.post('/', authorize('Admin','Partner'),
 
       const { rows } = await query(
         `INSERT INTO matters (case_number, client_id, matter_name, matter_type, statute_of_limitations, budget_amount,
-           assigned_partner_id, assigned_associate_id, estimated_value, description)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+           assigned_partner_id, assigned_associate_id, estimated_value, description, metadata)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
         [caseNumber, clientId, matterName, matterType, statuteOfLimitations || null, budgetAmount || null,
          assignedPartnerId || null, assignedAssociateId || null,
-         estimatedValue || null, description || null]
+         estimatedValue || null, description || null, JSON.stringify(req.body.metadata || {})]
       );
       res.status(201).json({ success: true, message: 'Matter created.', data: rows[0] });
     } catch (err) {
@@ -140,7 +140,7 @@ router.post('/', authorize('Admin','Partner'),
 router.put('/:id', authorize('Admin','Partner'), async (req, res) => {
   try {
     const allowed = ['matter_name','matter_type','status','assigned_partner_id',
-                     'assigned_associate_id','estimated_value','description','closing_date'];
+                     'assigned_associate_id','estimated_value','description','closing_date', 'metadata'];
     const setClauses = [], values = [];
     let n = 1;
     for (const [k, v] of Object.entries(req.body)) {
