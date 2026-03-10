@@ -289,4 +289,30 @@ router.get('/report/annual', authorize('Admin','Partner'), async (req, res) => {
   }
 });
 
+
+
+/* ── GET /api/payroll/staff/:staffId/pay-data ──────────────── */
+router.get('/staff/:staffId/pay-data', authorize('Admin','Partner'), async (req, res) => {
+  try {
+    const { staffId } = req.params;
+    const { rows: users } = await query('SELECT * FROM users WHERE id = $1', [staffId]);
+    if (!users.length) return res.status(404).json({ success: false, message: 'Staff not found.' });
+
+    const user = users[0];
+    const { rows: prod } = await query('SELECT * FROM vw_staff_productivity WHERE staff_id = $1', [staffId]);
+
+    res.json({
+      success: true,
+      data: {
+        baseSalary: user.annual_salary,
+        hourlyRate: user.hourly_rate,
+        barDues: user.bar_dues,
+        productivity: prod[0] || null
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 export default router;

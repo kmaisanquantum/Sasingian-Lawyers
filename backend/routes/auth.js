@@ -181,4 +181,22 @@ router.get('/users', authenticate, authorize('Admin', 'Partner'), async (req, re
   }
 });
 
+
+
+/* ── GET /api/auth/users/:id/productivity ────────────────── */
+router.get('/users/:id/productivity', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (req.user.id !== id && !["Admin","Partner"].includes(req.user.role))
+      return res.status(403).json({ success: false, message: "Access denied." });
+
+    const { rows } = await query("SELECT * FROM vw_staff_productivity WHERE staff_id = $1", [id]);
+    if (!rows.length) return res.status(404).json({ success: false, message: "Staff metrics not found." });
+
+    res.json({ success: true, data: rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 export default router;
