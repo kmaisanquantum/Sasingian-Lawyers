@@ -241,7 +241,7 @@ router.put('/:id/status', authorize('Admin'),
 router.get('/staff/:staffId', async (req, res) => {
   try {
     const { staffId } = req.params;
-    if (req.user.id !== staffId && !['Admin','Partner'].includes(req.user.role))
+    if (req.user.id !== staffId && !(req.user.role === 'Admin' || ['Partner', 'Managing partner', 'Senior partner', 'Junior partner', 'Non-equity partner', 'Equity partner'].includes(req.user.role)))
       return res.status(403).json({ success: false, message: 'Access denied.' });
 
     const [records, ytd] = await Promise.all([

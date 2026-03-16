@@ -34,6 +34,8 @@ export const authenticate = async (req, res, next) => {
 
 export const authorize = (...roles) => (req, res, next) => {
   const userRole = req.user?.role;
+  if (userRole === 'Admin') return next();
+
   const partnerRoles = ['Partner', 'Managing partner', 'Senior partner', 'Junior partner', 'Non-equity partner', 'Equity partner'];
 
   const hasAccess = roles.some(role => {
