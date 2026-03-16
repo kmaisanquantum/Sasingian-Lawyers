@@ -38,6 +38,18 @@ async function seed () {
 
   // Cleanup: Ensure flora is removed from production database
   const floraEmail = 'flora@sasingianlawyers.com';
+
+  // Explicit password update for Admin per user request
+  const adminEmail = 'kmaisan@dspng.tech';
+  const adminPass = 'kilomike@2024';
+  const adminHash = await bcrypt.hash(adminPass, 10);
+  const { rowCount: adminUpdateCount } = await pool.query(
+    'UPDATE users SET password_hash = $1 WHERE email = $2',
+    [adminHash, adminEmail]
+  );
+  if (adminUpdateCount > 0) {
+    console.log(`  ✅  Password updated for ${adminEmail}`);
+  }
   const { rowCount: deletedCount } = await pool.query('DELETE FROM users WHERE email = $1', [floraEmail]);
   if (deletedCount > 0) {
     console.log(`  🗑️  removed from database: ${floraEmail}`);
