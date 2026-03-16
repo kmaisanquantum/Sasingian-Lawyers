@@ -26,8 +26,10 @@ router.post('/login', [
     const token = generateToken(user);
     res.json({
       success: true,
-      token,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role, hourlyRate: user.hourly_rate }
+      data: {
+        token,
+        user: { id: user.id, name: user.name, email: user.email, role: user.role, hourlyRate: user.hourly_rate }
+      }
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
