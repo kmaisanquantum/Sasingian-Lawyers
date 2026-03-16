@@ -1,45 +1,37 @@
 import express from 'express';
-import bcrypt from 'bcryptjs';
 import { body, validationResult } from 'express-validator';
+import bcrypt from 'bcryptjs';
 import { query } from '../config/database.js';
 import { authenticate, authorize, generateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
-/* ── POST /api/auth/login ─────────────────────────────────────── */
-router.post('/login',
-  [ body('email').isEmail().normalizeEmail(), body('password').notEmpty() ],
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ success: false, errors: errors.array() });
+/* ── POST /api/auth/login ───────────────────────────────────── */
+router.post('/login', [
+  body('email').isEmail().normalizeEmail(),
+  body('password').notEmpty()
+], async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const { rows } = await query('SELECT * FROM users WHERE email = ', [email]);
+    const user = rows[0];
 
-    try {
-      const { email, password } = req.body;
-      const { rows } = await query('SELECT * FROM users WHERE email = $1', [email]);
+    if (!user || !user.is_active)
+      return res.status(401).json({ success: false, message: 'Invalid credentials or inactive account.' });
 
-      if (!rows.length || !rows[0].is_active)
-        return res.status(401).json({ success: false, message: 'Invalid credentials.' });
+    const isMatch = await bcrypt.compare(password, user.password_hash);
+    if (!isMatch)
+      return res.status(401).json({ success: false, message: 'Invalid credentials.' });
 
-      const ok = await bcrypt.compare(password, rows[0].password_hash);
-      if (!ok) return res.status(401).json({ success: false, message: 'Invalid credentials.' });
-
-      const user = rows[0];
-      res.json({
-        success: true,
-        data: {
-          token: generateToken(user),
-          user: { id: user.id, name: user.name, email: user.email, role: user.role, hourlyRate: user.hourly_rate }
-        }
-      });
-    } catch (err) {
-      res.status(500).json({ success: false, message: err.message });
-    }
+    const token = generateToken(user);
+    res.json({
+      success: true,
+      token,
+      user: { id: user.id, name: user.name, email: user.email, role: user.role, hourlyRate: user.hourly_rate }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
-);
-
-/* ── GET /api/auth/me ─────────────────────────────────────────── */
-router.get('/me', authenticate, (req, res) => {
-  res.json({ success: true, data: { user: req.user } });
 });
 
 /* ── POST /api/auth/register  (Admin only) ────────────────────── */
@@ -55,10 +47,8 @@ router.post('/register',
     try {
       const {
         name, email, password, role, hourlyRate = 0, annualSalary = 0,
-        designation, bankName, bankAccountNumber, bankAccountName, barDues = 0
+        designation, bankName, bankAccountNumber, bankAccountName, barDues
       } = req.body;
-      const exists = await query('SELECT id FROM users WHERE email = $1', [email]);
-      if (exists.rows.length) return res.status(400).json({ success: false, message: 'Email already exists.' });
 
       const hash = await bcrypt.hash(password, 10);
       const { rows } = await query(
@@ -68,48 +58,30 @@ router.post('/register',
         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id, name, email, role`,
         [name, email, hash, role, hourlyRate, annualSalary, designation, bankName, bankAccountNumber, bankAccountName, barDues]
       );
-      res.status(201).json({ success: true, data: { user: rows[0] } });
+      res.status(201).json({ success: true, data: rows[0] });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
     }
   }
 );
 
-/* ── PUT /api/auth/change-password ────────────────────────────── */
-router.put('/change-password', authenticate,
-  [ body('currentPassword').notEmpty(), body('newPassword').isLength({ min: 8 }) ],
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ success: false, errors: errors.array() });
-
-    try {
-      const { currentPassword, newPassword } = req.body;
-      const { rows } = await query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
-      const ok = await bcrypt.compare(currentPassword, rows[0].password_hash);
-      if (!ok) return res.status(401).json({ success: false, message: 'Current password incorrect.' });
-
-      const hash = await bcrypt.hash(newPassword, 10);
-      await query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, req.user.id]);
-      res.json({ success: true, message: 'Password updated.' });
-    } catch (err) {
-      res.status(500).json({ success: false, message: err.message });
-    }
-  }
-);
+/* ── GET /api/auth/me ───────────────────────────────────────── */
+router.get('/me', authenticate, (req, res) => {
+  res.json({ success: true, user: req.user });
+});
 
 /* ── PUT /api/auth/users/:id/password (Admin only) ─────────── */
 router.put('/users/:id/password', authenticate, authorize('Admin'),
-  [ body('newPassword').isLength({ min: 8 }) ],
+  [ body('password').isLength({ min: 8 }) ],
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ success: false, errors: errors.array() });
 
     try {
-      const hash = await bcrypt.hash(req.body.newPassword, 10);
+      const hash = await bcrypt.hash(req.body.password, 10);
       const { rowCount } = await query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, req.params.id]);
       if (!rowCount) return res.status(404).json({ success: false, message: 'User not found.' });
-
-      res.json({ success: true, message: 'User password updated.' });
+      res.json({ success: true, message: 'Password updated successfully.' });
     } catch (err) {
       res.status(500).json({ success: false, message: err.message });
     }
@@ -119,18 +91,16 @@ router.put('/users/:id/password', authenticate, authorize('Admin'),
 /* ── DELETE /api/auth/users/:id (Admin only) ────────────────── */
 router.delete('/users/:id', authenticate, authorize('Admin'), async (req, res) => {
   try {
-    if (req.params.id === req.user.id)
-      return res.status(400).json({ success: false, message: 'You cannot delete your own account.' });
+    if (req.user.id === req.params.id)
+      return res.status(400).json({ success: false, message: 'Cannot delete yourself.' });
 
     const { rowCount } = await query('DELETE FROM users WHERE id = $1', [req.params.id]);
-
-    if (!rowCount)
-      return res.status(404).json({ success: false, message: 'User not found.' });
-
-    res.json({ success: true, message: 'User deleted successfully.' });
+    if (!rowCount) return res.status(404).json({ success: false, message: 'User not found.' });
+    res.json({ success: true, message: 'User deleted.' });
   } catch (err) {
-    if (err.code === '23503')
-      return res.status(400).json({ success: false, message: 'Cannot delete user because they have associated records (e.g. time entries, matters). Consider deactivating them instead.' });
+    if (err.code === '23503') {
+      return res.status(400).json({ success: false, message: 'Cannot delete user with associated data. Deactivate instead.' });
+    }
     res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -175,22 +145,33 @@ router.put('/users/:id', authenticate, authorize('Admin', 'Partner'),
 /* ── GET /api/auth/users  (Admin/Partner) ─────────────────────── */
 router.get('/users', authenticate, authorize('Admin', 'Partner'), async (req, res) => {
   try {
-    const { rows } = await query(
-      'SELECT * FROM users ORDER BY name'
-    );
+    const { role } = req.query;
+    const partnerRoles = ['Partner', 'Managing partner', 'Senior partner', 'Junior partner', 'Non-equity partner', 'Equity partner'];
+
+    let sql = 'SELECT * FROM users';
+    let params = [];
+
+    if (role === 'Partner') {
+      sql += ' WHERE role = ANY($1)';
+      params = [partnerRoles];
+    } else if (role) {
+      sql += ' WHERE role = $1';
+      params = [role];
+    }
+
+    sql += ' ORDER BY name';
+    const { rows } = await query(sql, params);
     res.json({ success: true, data: rows });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-
-
 /* ── GET /api/auth/users/:id/productivity ────────────────── */
 router.get('/users/:id/productivity', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-    if (req.user.id !== id && !["Admin","Partner"].includes(req.user.role))
+    if (req.user.id !== id && !(req.user.role === "Admin" || ["Partner", "Managing partner", "Senior partner", "Junior partner", "Non-equity partner", "Equity partner"].includes(req.user.role)))
       return res.status(403).json({ success: false, message: "Access denied." });
 
     const { rows } = await query("SELECT * FROM vw_staff_productivity WHERE staff_id = $1", [id]);
