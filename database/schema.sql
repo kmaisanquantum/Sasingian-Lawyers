@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS users (
     name            VARCHAR(255) NOT NULL,
     email           VARCHAR(255) UNIQUE NOT NULL,
     password_hash   VARCHAR(255) NOT NULL,
-    role            VARCHAR(50)  NOT NULL CHECK (role IN ('Admin','Partner','Associate','Staff')),
+    role            VARCHAR(50)  NOT NULL CHECK (role IN ('Admin','Partner','Associate','Staff','Managing partner','Senior partner','Junior partner','Non-equity partner','Equity partner')),
     hourly_rate     DECIMAL(10,2) DEFAULT 0.00,
     annual_salary   DECIMAL(12,2) DEFAULT 0.00,
     designation     VARCHAR(100),
