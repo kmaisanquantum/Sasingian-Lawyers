@@ -7,6 +7,11 @@ import api from '../utils/api';
 const ROLE_BADGE = {
   'Admin':     'bg-ink text-gold-500 border-ink',
   'Partner':   'bg-gold-500 text-ink border-gold-600',
+  'Managing partner':   'bg-gold-500 text-ink border-gold-600',
+  'Senior partner':     'bg-gold-500 text-ink border-gold-600',
+  'Junior partner':     'bg-gold-500 text-ink border-gold-600',
+  'Non-equity partner': 'bg-gold-500 text-ink border-gold-600',
+  'Equity partner':     'bg-gold-500 text-ink border-gold-600',
   'Associate': 'bg-gold-100 text-gold-700 border-gold-300',
   'Staff':     'bg-ink/5 text-ink/60 border-ink/10'
 };
@@ -227,7 +232,7 @@ export default function Staff() {
                 <div>
                   <label className="label">Role</label>
                   <select className="input" value={form.role} onChange={e => setForm(f => ({...f, role: e.target.value}))}>
-                    {['Admin','Partner','Associate','Staff'].map(r => <option key={r} value={r}>{r}</option>)}
+                    {['Admin','Partner','Managing partner','Senior partner','Junior partner','Non-equity partner','Equity partner','Associate','Staff'].map(r => <option key={r} value={r}>{r}</option>)}
                   </select>
                 </div>
               </div>

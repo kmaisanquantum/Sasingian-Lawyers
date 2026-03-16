@@ -47,7 +47,7 @@ router.post('/register',
   authenticate,
   authorize('Admin'),
   [ body('name').notEmpty(), body('email').isEmail().normalizeEmail(),
-    body('password').isLength({ min: 8 }), body('role').isIn(['Admin','Partner','Associate','Staff']) ],
+    body('password').isLength({ min: 8 }), body('role').isIn(['Admin','Partner','Associate','Staff','Managing partner','Senior partner','Junior partner','Non-equity partner','Equity partner']) ],
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ success: false, errors: errors.array() });
@@ -137,7 +137,10 @@ router.delete('/users/:id', authenticate, authorize('Admin'), async (req, res) =
 
 /* ── PUT /api/auth/users/:id (Admin/Partner only) ─────────── */
 router.put('/users/:id', authenticate, authorize('Admin', 'Partner'),
+  [ body('role').optional().isIn(['Admin','Partner','Associate','Staff','Managing partner','Senior partner','Junior partner','Non-equity partner','Equity partner']) ],
   async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ success: false, errors: errors.array() });
     try {
       const {
         name, role, hourlyRate, annualSalary, designation,
