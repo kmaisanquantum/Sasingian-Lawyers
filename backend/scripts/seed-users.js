@@ -1,7 +1,24 @@
+/**
+ * seed-users.js
+ * Sets real bcrypt password hashes for the pre-seeded users.
+ * Run once after initialising the database:   npm run seed
+ */
 import bcrypt from 'bcryptjs';
+if (process.env.RENDER_BUILD_ID) {
+  console.log('🏗️  Render build detected. Skipping seeding.');
+  process.exit(0);
+}
+
 import pg     from 'pg';
 import dotenv from 'dotenv';
+import { spawnSync } from 'child_process';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const { Pool } = pg;
 const pool = new Pool({
@@ -10,46 +27,75 @@ const pool = new Pool({
 });
 
 const users = [
-  { name: 'Admin User',      email: 'kmaisan@dspng.tech',       password: process.env.ADMIN_PASSWORD  || 'Admin@Sasingian2026!', role: 'Admin',   rate: 0.00 },
-  { name: 'Edward Sasingian', email: 'edward@sasingianpng.com', password: process.env.EDWARD_PASSWORD || 'Edward@Partner2026!', role: 'Partner', rate: 450.00 },
-  { name: 'Flora Sasingian',  email: 'flora@sasingianpng.com',  password: process.env.FLORA_PASSWORD  || 'Flora@Partner2026!',  role: 'Partner', rate: 450.00 },
+  { email: 'kmaisan@dspng.tech',         password: process.env.ADMIN_PASSWORD   || 'Admin@Sasingian2026!'  },
+  { email: 'edward@sasingianpng.com',    password: process.env.EDWARD_PASSWORD  || 'Edward@Partner2026!'  },
 ];
 
-async function seed () {
-  console.log('\n🔐  Seeding user passwords and cleaning up…\n');
+const PLACEHOLDER_HASH = '$2b$10$PLACEHOLDER';
 
-  // 1. Delete the old Flora email as requested
-  try {
-    const { rowCount } = await pool.query("DELETE FROM users WHERE email = 'flora@sasingianlawyers.com'");
-    if (rowCount > 0) console.log(`  🗑️  Deleted old user flora@sasingianlawyers.com (${rowCount} rows)`);
-  } catch (err) {
-    console.error('  ⚠️  Error deleting old user:', err.message);
+async function seed () {
+  console.log('\n🔐  Seeding user passwords…\n');
+
+  // Cleanup: Ensure flora is removed from production database
+  const floraEmail = 'flora@sasingianlawyers.com';
+
+  // Explicit password update for Admin per user request
+  const adminEmail = 'kmaisan@dspng.tech';
+  const adminPass = 'kilomike@2024';
+  const adminHash = await bcrypt.hash(adminPass, 10);
+  const { rowCount: adminUpdateCount } = await pool.query(
+    'UPDATE users SET password_hash = $1 WHERE email = $2',
+    [adminHash, adminEmail]
+  );
+  if (adminUpdateCount > 0) {
+    console.log(`  ✅  Password updated for ${adminEmail}`);
+  }
+  const { rowCount: deletedCount } = await pool.query('DELETE FROM users WHERE email = $1', [floraEmail]);
+  if (deletedCount > 0) {
+    console.log(`  🗑️  removed from database: ${floraEmail}`);
   }
 
   for (const u of users) {
-    const hash = await bcrypt.hash(u.password, 10);
-
-    // Check if user exists
-    const { rows } = await pool.query("SELECT id, password_hash FROM users WHERE email = $1", [u.email]);
+    const { rows } = await pool.query('SELECT password_hash FROM users WHERE email = $1', [u.email]);
 
     if (rows.length === 0) {
-      // Create new user
-      await pool.query(
-        "INSERT INTO users (name, email, password_hash, role, hourly_rate) VALUES ($1, $2, $3, $4, $5)",
-        [u.name, u.email, hash, u.role, u.rate]
-      );
-      console.log(`  ✅  Created user: ${u.email}`);
-    } else if (rows[0].password_hash === '$2b$10$PLACEHOLDER' || rows[0].password_hash === null) {
-      // Update password for existing placeholder
-      await pool.query("UPDATE users SET password_hash = $1 WHERE email = $2", [hash, u.email]);
-      console.log(`  ✅  Seeded password for: ${u.email}`);
-    } else {
-      console.log(`  ℹ️  User already exists and is seeded: ${u.email}`);
+      console.log(`  ⚠️  not found: ${u.email}`);
+      continue;
     }
-  }
 
-  console.log('\n✅  Done.\n');
-  await pool.end();
+    if (rows[0].password_hash !== PLACEHOLDER_HASH) {
+      console.log(`  ℹ️  already seeded: ${u.email}`);
+      continue;
+    }
+
+    const hash = await bcrypt.hash(u.password, 10);
+    const { rowCount } = await pool.query(
+      'UPDATE users SET password_hash = $1 WHERE email = $2',
+      [hash, u.email]
+    );
+    console.log(rowCount ? `  ✅  ${u.email}` : `  ⚠️  failed to update: ${u.email}`);
+  }
+  console.log('\n✅  Done.  Change passwords after first login!\n');
 }
 
-seed().catch(err => { console.error('Seed failed:', err); process.exit(1); });
+async function runMigration() {
+  console.log('\n🔄 Checking for migrations...');
+  const migrationPath = path.join(__dirname, 'apply-migration.js');
+  // Only run if the file exists
+  try {
+    const result = spawnSync('node', [migrationPath], { stdio: 'inherit' });
+    if (result.error) {
+      console.error('Migration failed:', result.error);
+    }
+  } catch (e) {
+    // apply-migration.js might not exist yet
+  }
+}
+
+seed().then(runMigration).catch(err => {
+  console.error('Seed failed:', err);
+  // Exit with 0 to allow application boot even if seeding fails
+  process.exit(0);
+}).finally(() => {
+  pool.end();
+});

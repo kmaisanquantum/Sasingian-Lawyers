@@ -1,40 +1,101 @@
-import { useState } from 'react';
-import { FileText, Calculator, AlertCircle, CheckCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { FileText, Calculator, AlertCircle, CheckCircle, User, Zap, Save } from 'lucide-react';
 import Layout from '../components/Layout';
 import api    from '../utils/api';
 
 function fmt(n) { return `K ${parseFloat(n || 0).toLocaleString('en-PG', { minimumFractionDigits: 2 })}`; }
 
 export default function Payroll() {
-  const [form, setForm]         = useState({ grossPay: '', payFrequency: 'Fortnightly', allowances: '0', overtimePay: '0' });
+  const [staff, setStaff]       = useState([]);
+  const [form, setForm]         = useState({
+    staffId: '',
+    payFrequency: 'Fortnightly',
+    payPeriodStart: '',
+    payPeriodEnd: '',
+    grossPay: '',
+    allowances: '0',
+    overtimePay: '0',
+    performanceBonus: '0',
+    otherDeductions: '0',
+    grossPayManual: false
+  });
   const [result, setResult]     = useState(null);
   const [loading, setLoading]   = useState(false);
+  const [processing, setProcessing] = useState(false);
   const [error, setError]       = useState('');
+  const [success, setSuccess]   = useState('');
+
+  useEffect(() => {
+    loadStaff();
+  }, []);
+
+  async function loadStaff() {
+    try {
+      const { data } = await api.get('/auth/users');
+      setStaff(data.data.filter(u => u.is_active));
+    } catch (e) {
+      setError('Failed to load staff members');
+    }
+  }
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   async function calculate(e) {
-    e.preventDefault();
-    setError(''); setResult(null); setLoading(true);
+    if (e) e.preventDefault();
+    setError(''); setResult(null); setSuccess(''); setLoading(true);
     try {
       const { data } = await api.post('/payroll/calculate', {
-        grossPay:     parseFloat(form.grossPay),
-        payFrequency: form.payFrequency,
-        allowances:   parseFloat(form.allowances  || 0),
-        overtimePay:  parseFloat(form.overtimePay || 0),
+        staffId:          form.staffId || undefined,
+        payPeriodStart:   form.payPeriodStart || undefined,
+        payPeriodEnd:     form.payPeriodEnd || undefined,
+        grossPay:         parseFloat(form.grossPay || 0),
+        grossPayManual:   form.grossPayManual,
+        payFrequency:     form.payFrequency,
+        allowances:       parseFloat(form.allowances  || 0),
+        overtimePay:      parseFloat(form.overtimePay || 0),
+        performanceBonus: parseFloat(form.performanceBonus || 0),
+        otherDeductions:  parseFloat(form.otherDeductions || 0)
       });
       setResult(data.data);
+      if (!form.grossPayManual && data.data.grossPay) {
+          set('grossPay', data.data.grossPay.toString());
+      }
     } catch (e) {
       setError(e.response?.data?.message || e.message);
     } finally { setLoading(false); }
   }
 
+  async function processPayroll() {
+    if (!result) return;
+    setError(''); setSuccess(''); setProcessing(true);
+    try {
+      await api.post('/payroll/process', {
+        staffId:          form.staffId,
+        payPeriodStart:   form.payPeriodStart,
+        payPeriodEnd:     form.payPeriodEnd,
+        grossPay:         result.grossPay,
+        payFrequency:     result.payFrequency,
+        allowances:       result.allowances,
+        overtimePay:      result.overtimePay,
+        performanceBonus: result.performanceBonus,
+        barDues:          result.barDues,
+        leaveDeductions:  result.leaveDeductions,
+        otherDeductions:  result.otherDeductions,
+        notes:            `Integrated payroll run via Staff/HR & Matters`
+      });
+      setSuccess('Payroll processed and payslip archived successfully.');
+      setResult(null);
+    } catch (e) {
+      setError(e.response?.data?.message || e.message);
+    } finally { setProcessing(false); }
+  }
+
   return (
     <Layout>
       <div className="mb-8">
-        <h1 className="font-display text-4xl font-black text-ink">PNG Payroll</h1>
+        <h1 className="font-display text-4xl font-black text-ink">Integrated Payroll</h1>
         <p className="text-ink/50 font-medium mt-1">
-          Salary or Wages Tax (SWT) calculator — 2026 PNG IRC tables
+          Automated Salary, SWT & Superannuation — Sasingian Lawyers backoffice
         </p>
       </div>
 
@@ -45,29 +106,53 @@ export default function Payroll() {
             <div className="w-9 h-9 bg-gold-100 border-2 border-gold-500 flex items-center justify-center">
               <Calculator className="w-5 h-5 text-gold-700" />
             </div>
-            <h2 className="font-display font-bold text-xl text-ink">Calculate Payroll</h2>
+            <h2 className="font-display font-bold text-xl text-ink">Payroll Parameters</h2>
           </div>
 
           <form onSubmit={calculate} className="space-y-5">
-            <div>
-              <label className="label">Pay Frequency</label>
-              <select className="input" value={form.payFrequency} onChange={e => set('payFrequency', e.target.value)}>
-                <option value="Fortnightly">Fortnightly (every 2 weeks)</option>
-                <option value="Monthly">Monthly</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="label">Gross Pay (K)</label>
-              <input type="number" min="0" step="0.01" required className="input font-mono"
-                placeholder={form.payFrequency === 'Fortnightly' ? 'e.g. 2000.00' : 'e.g. 4333.00'}
-                value={form.grossPay} onChange={e => set('grossPay', e.target.value)} />
-              <p className="text-xs text-ink/40 mt-1">
-                Enter {form.payFrequency.toLowerCase()} gross pay in Kina (K)
-              </p>
-            </div>
-
             <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <label className="label">Select Staff Member</label>
+                <select className="input" value={form.staffId} onChange={e => set('staffId', e.target.value)}>
+                  <option value="">-- Generic Calculation (No Staff Selected) --</option>
+                  {staff.map(s => (
+                    <option key={s.id} value={s.id}>{s.name} ({s.role} - {s.designation || 'N/A'})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="label">Pay Period Start</label>
+                <input type="date" className="input" value={form.payPeriodStart} onChange={e => set('payPeriodStart', e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Pay Period End</label>
+                <input type="date" className="input" value={form.payPeriodEnd} onChange={e => set('payPeriodEnd', e.target.value)} />
+              </div>
+
+              <div>
+                <label className="label">Pay Frequency</label>
+                <select className="input" value={form.payFrequency} onChange={e => set('payFrequency', e.target.value)}>
+                  <option value="Fortnightly">Fortnightly</option>
+                  <option value="Monthly">Monthly</option>
+                </select>
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="label mb-0">Gross Pay (K)</label>
+                  <label className="text-[10px] font-black uppercase text-ink/40 flex items-center gap-1 cursor-pointer">
+                    <input type="checkbox" className="w-3 h-3" checked={form.grossPayManual} onChange={e => set('grossPayManual', e.target.checked)} />
+                    Manual
+                  </label>
+                </div>
+                <input type="number" min="0" step="0.01" className="input font-mono"
+                  disabled={!form.grossPayManual && !!form.staffId}
+                  value={form.grossPay} onChange={e => set('grossPay', e.target.value)} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-ink/5">
               <div>
                 <label className="label">Allowances (K)</label>
                 <input type="number" min="0" step="0.01" className="input font-mono"
@@ -77,6 +162,16 @@ export default function Payroll() {
                 <label className="label">Overtime Pay (K)</label>
                 <input type="number" min="0" step="0.01" className="input font-mono"
                   value={form.overtimePay} onChange={e => set('overtimePay', e.target.value)} />
+              </div>
+              <div>
+                <label className="label text-gold-700 font-bold">Performance Bonus (K)</label>
+                <input type="number" min="0" step="0.01" className="input border-gold-500 font-mono"
+                  value={form.performanceBonus} onChange={e => set('performanceBonus', e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Other Deductions (K)</label>
+                <input type="number" min="0" step="0.01" className="input font-mono"
+                  value={form.otherDeductions} onChange={e => set('otherDeductions', e.target.value)} />
               </div>
             </div>
 
@@ -89,35 +184,24 @@ export default function Payroll() {
 
             <button type="submit" disabled={loading} className="btn-gold w-full justify-center py-3">
               {loading ? (
-                <><span className="inline-block w-4 h-4 border-2 border-ink border-t-transparent rounded-full animate-spin" /> Calculating…</>
-              ) : <><Calculator className="w-4 h-4" /> Calculate SWT & Super</>}
+                <><span className="inline-block w-4 h-4 border-2 border-ink border-t-transparent rounded-full animate-spin" /> Synchronizing…</>
+              ) : <><Calculator className="w-4 h-4" /> Fetch & Calculate</>}
             </button>
           </form>
 
-          {/* PNG Tax reference card */}
-          <div className="mt-6 bg-ink/[0.04] border-2 border-ink/10 p-4">
-            <p className="text-xs font-black uppercase tracking-widest text-ink/50 mb-3">2026 PNG Tax Brackets</p>
-            <table className="w-full text-xs font-mono">
-              <tbody className="divide-y divide-ink/10">
-                {[
-                  ['Tax-free threshold', 'K20,000 / year', '0%'],
-                  ['Up to K12,500',      'annual taxable', '30%'],
-                  ['K12,501 – K20,000',  'annual taxable', '35%'],
-                  ['K20,001 – K33,000',  'annual taxable', '40%'],
-                  ['Over K33,000',       'annual taxable', '42%'],
-                ].map(([r, n, t]) => (
-                  <tr key={r} className="py-1">
-                    <td className="py-1 text-ink/70 font-medium">{r}</td>
-                    <td className="py-1 text-ink/40 text-center">{n}</td>
-                    <td className="py-1 font-bold text-right text-gold-700">{t}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="text-xs text-ink/50 mt-3 pt-2 border-t border-ink/10">
-              Superannuation: <strong>6%</strong> employee · <strong>8.4%</strong> employer
-            </p>
-          </div>
+          {/* Productivity suggestion */}
+          {result?.productivity && (
+            <div className="mt-6 bg-gold-50 border-2 border-gold-500 p-4">
+              <div className="flex items-center gap-2 mb-2 text-gold-700">
+                <Zap className="w-4 h-4" />
+                <span className="text-xs font-black uppercase tracking-widest">Attorney Productivity Alert</span>
+              </div>
+              <p className="text-xs font-medium text-ink/70">
+                This staff member has generated <strong>{fmt(result.productivity.billable_value)}</strong> in billable value from <strong>{result.productivity.total_hours}</strong> hours worked across <strong>{result.productivity.matters_worked_on}</strong> matters.
+                Consider applying a performance bonus.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Result panel */}
@@ -129,9 +213,21 @@ export default function Payroll() {
               </div>
               <div>
                 <h2 className="font-display font-bold text-xl text-ink">Pay Slip Preview</h2>
-                <p className="text-xs text-ink/50 font-medium">{result.payFrequency} · PNG IRC 2026</p>
+                <p className="text-xs text-ink/50 font-medium">
+                  {form.staffId ? staff.find(s => s.id === form.staffId)?.name : 'Generic User'} · {result.payFrequency}
+                </p>
               </div>
             </div>
+
+            {/* Billable info if hourly */}
+            {result.billableHours > 0 && (
+              <div className="flex items-center gap-2 mb-4 p-2 bg-ink/[0.03] border border-ink/10 rounded">
+                <Zap className="w-3 h-3 text-gold-600" />
+                <span className="text-[10px] font-bold text-ink/60 uppercase tracking-tight">
+                  Fetched from Matters: {result.billableHours} billable hours
+                </span>
+              </div>
+            )}
 
             {/* Breakdown */}
             <div className="space-y-2 mb-6">
@@ -171,41 +267,43 @@ export default function Payroll() {
             {/* Employer cost */}
             <div className="bg-gold-50 border-2 border-gold-500 p-4 mb-5">
               <div className="text-xs font-black uppercase tracking-widest text-gold-700 mb-2">
-                Employer Total Cost
+                Employer Total Cost (Outflow)
               </div>
               <div className="flex justify-between text-sm font-medium text-ink/70">
                 <span>Total Earnings</span>
-                <span className="font-mono">{fmt(result.employerCost?.netPayment)}</span>
+                <span className="font-mono">{fmt(result.totalEarnings)}</span>
               </div>
               <div className="flex justify-between text-sm font-medium text-ink/70 mt-1">
                 <span>Employer Super (8.4%)</span>
                 <span className="font-mono">{fmt(result.employerSuper)}</span>
               </div>
               <div className="flex justify-between font-black text-ink border-t-2 border-gold-400 mt-2 pt-2">
-                <span>Total Cost to Firm</span>
+                <span>Total Firm Liability</span>
                 <span className="font-mono">{fmt(result.employerCost?.totalCostToFirm)}</span>
               </div>
             </div>
 
-            {/* Annual summary */}
-            <div className="bg-ink/[0.04] border-2 border-ink/10 p-4">
-              <p className="text-xs font-black uppercase tracking-widest text-ink/50 mb-3">Annual Projection</p>
-              <div className="grid grid-cols-2 gap-y-2 text-sm font-medium">
-                <span className="text-ink/60">Annual Income</span>
-                <span className="font-mono font-bold text-right">{fmt(result.annualIncome)}</span>
-                <span className="text-ink/60">Annual SWT Tax</span>
-                <span className="font-mono font-bold text-right text-crimson-600">{fmt(result.annualTax)}</span>
-                <span className="text-ink/60">Effective Rate</span>
-                <span className="font-bold text-right">{result.effectiveTaxRate}</span>
+            <button
+                onClick={processPayroll}
+                disabled={processing || !form.staffId || !form.payPeriodStart || !form.payPeriodEnd}
+                className="btn-gold w-full justify-center py-3 bg-jade-600 border-jade-700 hover:bg-jade-700"
+            >
+              {processing ? 'Processing...' : <><Save className="w-4 h-4" /> Process & Archive Payslip</>}
+            </button>
+            {!form.staffId && <p className="text-[10px] text-center text-ink/40 mt-2">Select a staff member to process payroll</p>}
+
+            {success && (
+              <div className="mt-4 p-3 bg-jade-50 border border-jade-200 text-jade-700 text-sm font-bold text-center">
+                {success}
               </div>
-            </div>
+            )}
           </div>
         ) : (
           <div className="card p-6 flex items-center justify-center min-h-[300px]">
             <div className="text-center text-ink/30">
               <FileText className="w-16 h-16 mx-auto mb-3" strokeWidth={1} />
               <p className="font-bold uppercase tracking-wide text-sm">
-                Enter pay details to see the<br />PNG payroll breakdown
+                Select staff and dates to generate<br />the integrated pay run
               </p>
             </div>
           </div>

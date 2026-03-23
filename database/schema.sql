@@ -13,9 +13,14 @@ CREATE TABLE IF NOT EXISTS users (
     name            VARCHAR(255) NOT NULL,
     email           VARCHAR(255) UNIQUE NOT NULL,
     password_hash   VARCHAR(255) NOT NULL,
-    role            VARCHAR(50)  NOT NULL CHECK (role IN ('Admin','Partner','Associate','Staff')),
+    role            VARCHAR(50)  NOT NULL CHECK (role IN ('Admin','Partner','Associate','Staff','Managing partner','Senior partner','Junior partner','Non-equity partner','Equity partner')),
     hourly_rate     DECIMAL(10,2) DEFAULT 0.00,
     annual_salary   DECIMAL(12,2) DEFAULT 0.00,
+    designation     VARCHAR(100),
+    bank_name       VARCHAR(100),
+    bank_account_number VARCHAR(50),
+    bank_account_name   VARCHAR(255),
+    bar_dues        DECIMAL(12,2) DEFAULT 0.00,
     phone           VARCHAR(50),
     is_active       BOOLEAN DEFAULT true,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -56,9 +61,16 @@ CREATE TABLE IF NOT EXISTS matters (
     closing_date          DATE,
     estimated_value       DECIMAL(12,2),
     description           TEXT,
+    budget_amount         DECIMAL(12,2),
+    archived_at           TIMESTAMP,
+    statute_of_limitations DATE,
+    metadata              JSONB DEFAULT '{}'::jsonb,
     created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Ensure metadata column exists for existing installations
+ALTER TABLE matters ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
 
 -- ----------------------------------------------------------------
 -- TIME ENTRIES
@@ -86,6 +98,8 @@ CREATE TABLE IF NOT EXISTS trust_accounts (
     transaction_type VARCHAR(50) NOT NULL CHECK (transaction_type IN ('Deposit','Withdrawal','Transfer','Interest')),
     amount           DECIMAL(12,2) NOT NULL,
     balance          DECIMAL(12,2) NOT NULL,
+    reconciled_at    TIMESTAMP,
+    bank_statement_ref VARCHAR(100),
     description      TEXT NOT NULL,
     reference_number VARCHAR(100),
     created_by       UUID REFERENCES users(id),
@@ -141,6 +155,9 @@ CREATE TABLE IF NOT EXISTS payroll (
     employee_super   DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     employer_super   DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     other_deductions DECIMAL(12,2) DEFAULT 0.00,
+    leave_deductions DECIMAL(12,2) DEFAULT 0.00,
+    performance_bonus DECIMAL(12,2) DEFAULT 0.00,
+    bar_dues         DECIMAL(12,2) DEFAULT 0.00,
     total_deductions DECIMAL(12,2) NOT NULL,
     net_pay          DECIMAL(12,2) NOT NULL,
     payment_date     DATE,
@@ -287,8 +304,7 @@ INSERT INTO png_tax_rates (
 -- Users (passwords set via seed-users.js script)
 INSERT INTO users (name, email, password_hash, role, hourly_rate) VALUES
 ('Admin User',      'kmaisan@dspng.tech',          '$2b$10$PLACEHOLDER', 'Admin',   0.00),
-('Edward Sasingian','edward@sasingianpng.com',      '$2b$10$PLACEHOLDER', 'Partner', 450.00),
-('Flora Sasingian', 'flora@sasingianpng.com',   '$2b$10$PLACEHOLDER', 'Partner', 450.00)
+('Edward Sasingian','edward@sasingianpng.com',      '$2b$10$PLACEHOLDER', 'Partner', 450.00)
 ON CONFLICT (email) DO NOTHING;
 
 -- Sample clients
@@ -298,3 +314,175 @@ INSERT INTO clients (client_name, client_type, email, phone, address, tin_number
 ('Pacific Investments Ltd',    'Corporate',  'info@pacinvest.com.pg',  '+675 321 0987', 'Lae, Morobe Province',   'TIN-003-2024'),
 ('John Kila',                  'Individual', 'jkila@gmail.com',        '+675 700 1234', 'Boroko, NCD',            NULL)
 ON CONFLICT DO NOTHING;
+
+-- ----------------------------------------------------------------
+-- OPERATING ACCOUNT (Firm Overhead & Income)
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS firm_operating_ledger (
+    id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    transaction_date DATE NOT NULL,
+    category         VARCHAR(100) NOT NULL CHECK (category IN ('Rent','Salary','Marketing','Professional Dues','Realized Income','Other')),
+    amount           DECIMAL(12,2) NOT NULL,
+    balance          DECIMAL(12,2) NOT NULL,
+    description      TEXT NOT NULL,
+    reference_number VARCHAR(100),
+    created_by       UUID REFERENCES users(id),
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ----------------------------------------------------------------
+-- REIMBURSABLE EXPENSES (Costs Advanced)
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS reimbursable_expenses (
+    id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    matter_id        UUID REFERENCES matters(id) ON DELETE CASCADE,
+    description      TEXT NOT NULL,
+    amount           DECIMAL(12,2) NOT NULL,
+    expense_date     DATE NOT NULL,
+    is_invoiced      BOOLEAN DEFAULT false,
+    created_by       UUID REFERENCES users(id),
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ----------------------------------------------------------------
+-- ADDITIONAL REPORTING VIEWS
+-- ----------------------------------------------------------------
+CREATE OR REPLACE VIEW vw_accounts_receivable AS
+SELECT
+    m.id AS matter_id,
+    m.case_number,
+    m.matter_name,
+    c.client_name,
+    COALESCE(SUM(i.total_amount), 0) AS total_billed,
+    COALESCE(SUM(CASE WHEN i.status != 'Paid' THEN i.total_amount ELSE 0 END), 0) AS amount_due
+FROM matters m
+JOIN clients c ON m.client_id = c.id
+LEFT JOIN invoices i ON m.id = i.matter_id AND i.status != 'Cancelled'
+GROUP BY m.id, m.case_number, m.matter_name, c.client_name;
+
+
+CREATE OR REPLACE VIEW vw_work_in_progress AS
+SELECT
+    m.id AS matter_id,
+    m.case_number,
+    m.matter_name,
+    c.client_name,
+    COALESCE(SUM(CASE WHEN te.is_billable AND NOT te.is_invoiced THEN te.hours * te.hourly_rate ELSE 0 END), 0) AS unbilled_time,
+    COALESCE((SELECT SUM(amount) FROM reimbursable_expenses re WHERE re.matter_id = m.id AND NOT re.is_invoiced), 0) AS unbilled_expenses
+FROM matters m
+JOIN clients c ON m.client_id = c.id
+LEFT JOIN time_entries te ON m.id = te.matter_id
+GROUP BY m.id, m.case_number, m.matter_name, c.client_name;
+
+CREATE OR REPLACE VIEW vw_staff_productivity AS
+SELECT
+    u.id AS staff_id,
+    u.name AS staff_name,
+    u.role,
+    u.hourly_rate,
+    COALESCE(SUM(te.hours), 0) AS total_hours,
+    COALESCE(SUM(te.hours * te.hourly_rate), 0) AS billable_value,
+    COUNT(DISTINCT te.matter_id) AS matters_worked_on
+FROM users u
+LEFT JOIN time_entries te ON u.id = te.user_id
+GROUP BY u.id, u.name, u.role, u.hourly_rate;
+
+CREATE INDEX IF NOT EXISTS idx_firm_op_date ON firm_operating_ledger(transaction_date);
+CREATE INDEX IF NOT EXISTS idx_reimbursable_matter ON reimbursable_expenses(matter_id);
+
+-- ----------------------------------------------------------------
+-- MATTER DOCUMENTS
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS matter_documents (
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    matter_id     UUID REFERENCES matters(id) ON DELETE CASCADE,
+    category      VARCHAR(100) NOT NULL CHECK (category IN ('Pleading','Correspondence','Evidence','Template','Other')),
+    file_name     VARCHAR(255) NOT NULL,
+    file_path     TEXT NOT NULL,
+    uploaded_by   UUID REFERENCES users(id),
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ----------------------------------------------------------------
+-- MATTER TASKS
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS matter_tasks (
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    matter_id     UUID REFERENCES matters(id) ON DELETE CASCADE,
+    title         VARCHAR(255) NOT NULL,
+    description   TEXT,
+    status        VARCHAR(50) DEFAULT 'Pending' CHECK (status IN ('Pending','In Progress','Completed','Deferred','Cancelled')),
+    due_date      DATE,
+    assigned_to   UUID REFERENCES users(id),
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ----------------------------------------------------------------
+-- MATTER EVENTS (Calendar & Deadlines)
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS matter_events (
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    matter_id     UUID REFERENCES matters(id) ON DELETE CASCADE,
+    title         VARCHAR(255) NOT NULL,
+    event_type    VARCHAR(100) NOT NULL CHECK (event_type IN ('Court Date','Filing Deadline','Statute of Limitations','Meeting','Hearing','Other')),
+    start_time    TIMESTAMP NOT NULL,
+    end_time      TIMESTAMP NOT NULL,
+    location      TEXT,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ----------------------------------------------------------------
+-- MATTER PARTIES & CONTACTS
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS matter_parties (
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    matter_id     UUID REFERENCES matters(id) ON DELETE CASCADE,
+    name          VARCHAR(255) NOT NULL,
+    role          VARCHAR(100) NOT NULL CHECK (role IN ('Client','Opposing Counsel','Judge','Witness','Expert','Other')),
+    contact_info  TEXT,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ----------------------------------------------------------------
+-- MATTER ACTIVITY LOG & NOTES
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS matter_notes (
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    matter_id     UUID REFERENCES matters(id) ON DELETE CASCADE,
+    content       TEXT NOT NULL,
+    created_by    UUID REFERENCES users(id),
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ----------------------------------------------------------------
+-- CONFLICT CHECKS (Intake)
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS conflict_checks (
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    search_terms  TEXT NOT NULL,
+    results       JSONB,
+    is_cleared    BOOLEAN DEFAULT false,
+    cleared_by    UUID REFERENCES users(id),
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_matter_docs_matter ON matter_documents(matter_id);
+CREATE INDEX IF NOT EXISTS idx_matter_tasks_matter ON matter_tasks(matter_id);
+CREATE INDEX IF NOT EXISTS idx_matter_events_matter ON matter_events(matter_id);
+CREATE INDEX IF NOT EXISTS idx_matter_parties_matter ON matter_parties(matter_id);
+CREATE INDEX IF NOT EXISTS idx_matter_notes_matter ON matter_notes(matter_id);
+
+-- ----------------------------------------------------------------
+-- STAFF DOCUMENTS (HR Folder)
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS staff_documents (
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    staff_id      UUID REFERENCES users(id) ON DELETE CASCADE,
+    category      VARCHAR(100) NOT NULL CHECK (category IN ('Payslip','Contract','Identification','Other')),
+    file_name     VARCHAR(255) NOT NULL,
+    file_path     TEXT NOT NULL,
+    uploaded_by   UUID REFERENCES users(id),
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_staff_docs_staff ON staff_documents(staff_id);

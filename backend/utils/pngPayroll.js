@@ -42,26 +42,31 @@ export class PNGPayrollCalculator {
   }
 
   /** Core calculation for any frequency */
-  calculate (grossPay, frequency = 'Fortnightly', allowances = 0, overtimePay = 0, otherDeductions = 0) {
+  calculate (grossPay, frequency = 'Fortnightly', allowances = 0, overtimePay = 0, otherDeductions = 0, performanceBonus = 0, barDues = 0, leaveDeductions = 0) {
     const periods      = frequency === 'Monthly' ? 12 : 26;
-    const totalEarnings = grossPay + allowances + overtimePay;
+    const totalEarnings = grossPay + allowances + overtimePay + performanceBonus;
     const annualGross   = totalEarnings * periods;
     const annualTax     = this.annualSWT(annualGross);
 
     const periodTax     = Math.round((annualTax     / periods) * 100) / 100;
     const empSuper      = Math.round(totalEarnings  * this.EMP_SUPER  * 100) / 100;
     const emprSuper     = Math.round(totalEarnings  * this.EMPR_SUPER * 100) / 100;
-    const totalDeduct   = periodTax + empSuper + otherDeductions;
+
+    // Bar dues and leave deductions are after-tax deductions in this model
+    const totalDeduct   = periodTax + empSuper + otherDeductions + barDues + leaveDeductions;
     const netPay        = Math.round((totalEarnings - totalDeduct) * 100) / 100;
 
     return {
       grossPay,
       allowances,
       overtimePay,
+      performanceBonus,
       totalEarnings,
       swtTax:          periodTax,
       employeeSuper:   empSuper,
       employerSuper:   emprSuper,
+      barDues,
+      leaveDeductions,
       otherDeductions,
       totalDeductions: totalDeduct,
       netPay,
