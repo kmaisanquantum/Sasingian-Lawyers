@@ -41,7 +41,7 @@ router.post('/register',
   authenticate,
   authorize('Admin'),
   [ body('name').notEmpty(), body('email').isEmail().normalizeEmail(),
-    body('password').isLength({ min: 8 }), body('role').isIn(['Admin','Partner','Associate','Staff','Managing partner','Senior partner','Junior partner','Non-equity partner','Equity partner']) ],
+    body('newPassword').isLength({ min: 8 }), body('role').isIn(['Admin','Partner','Associate','Staff','Managing partner','Senior partner','Junior partner','Non-equity partner','Equity partner']) ],
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ success: false, errors: errors.array() });
@@ -74,13 +74,13 @@ router.get('/me', authenticate, (req, res) => {
 
 /* ── PUT /api/auth/users/:id/password (Admin only) ─────────── */
 router.put('/users/:id/password', authenticate, authorize('Admin'),
-  [ body('password').isLength({ min: 8 }) ],
+  [ body('newPassword').isLength({ min: 8 }) ],
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ success: false, errors: errors.array() });
 
     try {
-      const hash = await bcrypt.hash(req.body.password, 10);
+      const hash = await bcrypt.hash(req.body.newPassword, 10);
       const { rowCount } = await query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, req.params.id]);
       if (!rowCount) return res.status(404).json({ success: false, message: 'User not found.' });
       res.json({ success: true, message: 'Password updated successfully.' });
