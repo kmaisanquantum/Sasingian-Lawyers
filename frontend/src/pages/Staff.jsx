@@ -145,7 +145,7 @@ export default function Staff() {
         </div>
       )}
 
-      <div className="card">
+      <div className="card overflow-hidden">
         <div className="grid grid-cols-12 gap-3 px-5 py-3 border-b-2 border-ink/10 bg-ink/[0.03]">
           {['Name', 'Email', 'Role', 'Hourly Rate', 'Status', ''].map((h, i) => (
             <div key={i} className={`text-xs font-black uppercase tracking-widest text-ink/50
@@ -165,6 +165,7 @@ export default function Staff() {
               <div className="font-bold text-ink text-sm">{s.name}</div>
               <div className="text-xs text-ink/40 font-medium">{s.designation || 'No designation'}</div>
               {s.id === me?.id && <div className="text-xs text-gold-600 font-bold">(You)</div>}
+              {s.designation && <div className="text-[10px] uppercase font-black tracking-widest text-ink/40">{s.designation}</div>}
             </div>
             <div className="col-span-4 text-sm text-ink/60 font-medium truncate">{s.email}</div>
             <div className="col-span-2">

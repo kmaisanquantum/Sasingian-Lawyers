@@ -209,6 +209,21 @@ CREATE TABLE IF NOT EXISTS leave_requests (
 -- ----------------------------------------------------------------
 -- AUDIT LOG
 -- ----------------------------------------------------------------
+-- ----------------------------------------------------------------
+-- USER DOCUMENTS (Payslips & HR)
+-- ----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS user_documents (
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id       UUID REFERENCES users(id) ON DELETE CASCADE,
+    category      VARCHAR(100) NOT NULL CHECK (category IN ('Payslip','Contract','ID','Other')),
+    file_name     VARCHAR(255) NOT NULL,
+    file_path     TEXT NOT NULL,
+    uploaded_by   UUID REFERENCES users(id),
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_docs_user ON user_documents(user_id);
+
 CREATE TABLE IF NOT EXISTS audit_log (
     id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id    UUID REFERENCES users(id),

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { FileText, Calculator, AlertCircle, CheckCircle, User, Zap, Save } from 'lucide-react';
 import Layout from '../components/Layout';
-import api    from '../utils/api';
+import api from '../utils/api';
 
-function fmt(n) { return `K ${parseFloat(n || 0).toLocaleString('en-PG', { minimumFractionDigits: 2 })}`; }
+const fmt = (v) => new Intl.NumberFormat('en-PG', { style: 'currency', currency: 'PGK' }).format(v);
 
 export default function Payroll() {
   const [staff, setStaff]       = useState([]);
@@ -38,7 +38,60 @@ export default function Payroll() {
     }
   }
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const [staff, setStaff] = useState([]);
+  const [payData, setPayData] = useState(null);
+  const [productivity, setProductivity] = useState(null);
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    loadStaff();
+  }, []);
+
+  async function loadStaff() {
+    try {
+      const { data } = await api.get('/auth/users');
+      setStaff(data.data || []);
+    } catch (e) {
+      setError('Failed to load staff members.');
+    }
+  }
+
+  async function loadStaffPayData(staffId) {
+    if (!staffId || !form.payPeriodStart || !form.payPeriodEnd) return;
+    setLoading(true);
+    try {
+      const [payRes, prodRes] = await Promise.all([
+        api.get(`/payroll/staff/${staffId}/pay-data`, {
+          params: { startDate: form.payPeriodStart, endDate: form.payPeriodEnd }
+        }),
+        api.get(`/auth/users/${staffId}/productivity`, {
+          params: { startDate: form.payPeriodStart, endDate: form.payPeriodEnd }
+        })
+      ]);
+
+      const d = payRes.data.data;
+      setPayData(d);
+      setProductivity(prodRes.data.data);
+
+      setForm(f => ({
+        ...f,
+        grossPay: d.suggestedGrossPay,
+        otherDeductions: (parseFloat(d.leaveDeduction || 0) + parseFloat(d.mandatoryDeductions || 0)).toString()
+      }));
+    } catch (e) {
+      setError('Failed to fetch automated pay data.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const set = (k, v) => {
+    setForm(f => ({ ...f, [k]: v }));
+    if (k === 'staffId' && v) loadStaffPayData(v);
+  };
 
   async function calculate(e) {
     if (e) e.preventDefault();
@@ -154,14 +207,21 @@ export default function Payroll() {
 
             <div className="grid grid-cols-2 gap-4 pt-4 border-t border-ink/5">
               <div>
-                <label className="label">Allowances (K)</label>
-                <input type="number" min="0" step="0.01" className="input font-mono"
-                  value={form.allowances} onChange={e => set('allowances', e.target.value)} />
+                <label className="label">Staff Member</label>
+                <select className="input" value={form.staffId} onChange={e => set('staffId', e.target.value)}>
+                  <option value="">-- Select Staff --</option>
+                  {staff.map(s => <option key={s.id} value={s.id}>{s.name} ({s.role})</option>)}
+                </select>
               </div>
-              <div>
-                <label className="label">Overtime Pay (K)</label>
-                <input type="number" min="0" step="0.01" className="input font-mono"
-                  value={form.overtimePay} onChange={e => set('overtimePay', e.target.value)} />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Period Start</label>
+                  <input type="date" className="input" value={form.payPeriodStart} onChange={e => set('payPeriodStart', e.target.value)} />
+                </div>
+                <div>
+                  <label className="label">Period End</label>
+                  <input type="date" className="input" value={form.payPeriodEnd} onChange={e => set('payPeriodEnd', e.target.value)} />
+                </div>
               </div>
               <div>
                 <label className="label text-gold-700 font-bold">Performance Bonus (K)</label>
@@ -204,12 +264,15 @@ export default function Payroll() {
           )}
         </div>
 
-        {/* Result panel */}
-        {result ? (
-          <div className="card p-6 animate-fadeIn">
-            <div className="flex items-center gap-3 mb-6 pb-4 border-b-2 border-ink/10">
-              <div className="w-9 h-9 bg-jade-100 border-2 border-jade-500 flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 text-jade-700" />
+          {/* Productivity Insights */}
+          {productivity && (
+            <div className="card p-6 border-l-4 border-jade-500">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-ink flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-jade-600" />
+                  Attorney Productivity
+                </h3>
+                <span className="badge badge-open text-xs">Score: {productivity.stats.productivityScore}</span>
               </div>
               <div>
                 <h2 className="font-display font-bold text-xl text-ink">Pay Slip Preview</h2>
@@ -218,6 +281,7 @@ export default function Payroll() {
                 </p>
               </div>
             </div>
+          )}
 
             {/* Billable info if hourly */}
             {result.billableHours > 0 && (
@@ -246,23 +310,21 @@ export default function Payroll() {
               ))}
             </div>
 
-            {/* Net pay highlight */}
-            <div className="bg-jade-50 border-2 border-jade-500 p-4 mb-5">
-              <div className="flex justify-between items-center">
+            <form onSubmit={calculate} className="space-y-5">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <div className="text-xs font-black uppercase tracking-widest text-jade-700 mb-1">
-                    Employee Net Pay
-                  </div>
-                  <div className="font-display text-3xl font-black text-jade-700">
-                    {fmt(result.netPay)}
-                  </div>
+                  <label className="label">Pay Frequency</label>
+                  <select className="input" value={form.payFrequency} onChange={e => set('payFrequency', e.target.value)}>
+                    <option value="Fortnightly">Fortnightly</option>
+                    <option value="Monthly">Monthly</option>
+                  </select>
                 </div>
-                <div className="text-right">
-                  <div className="text-xs text-jade-600 font-medium">Take-home</div>
-                  <div className="font-black text-jade-700 text-xl">{result.takeHomePct}</div>
+                <div>
+                  <label className="label">Gross Pay (K)</label>
+                  <input type="number" step="0.01" required className="input font-mono"
+                    value={form.grossPay} onChange={e => set('grossPay', e.target.value)} />
                 </div>
               </div>
-            </div>
 
             {/* Employer cost */}
             <div className="bg-gold-50 border-2 border-gold-500 p-4 mb-5">
@@ -273,15 +335,26 @@ export default function Payroll() {
                 <span>Total Earnings</span>
                 <span className="font-mono">{fmt(result.totalEarnings)}</span>
               </div>
-              <div className="flex justify-between text-sm font-medium text-ink/70 mt-1">
-                <span>Employer Super (8.4%)</span>
-                <span className="font-mono">{fmt(result.employerSuper)}</span>
+
+              <div className="space-y-2 mb-6">
+                {result.breakdown.map((row, i) => (
+                  <div key={i} className={`flex justify-between items-center py-2
+                    ${row.bold ? 'border-t-2 border-b-2 border-ink/20 my-3' : 'border-b border-ink/5'}`}>
+                    <span className={`text-sm ${row.bold ? 'font-black text-ink' : 'text-ink/70 font-medium'}`}>
+                      {row.label}
+                    </span>
+                    <span className={`font-mono text-sm
+                      ${row.bold ? 'font-black text-ink text-base' : ''}
+                      ${row.amount < 0 ? 'text-crimson-600' : 'text-ink'}`}>
+                      {row.amount < 0 ? `- ${fmt(Math.abs(row.amount))}` : fmt(row.amount)}
+                    </span>
+                  </div>
+                ))}
               </div>
               <div className="flex justify-between font-black text-ink border-t-2 border-gold-400 mt-2 pt-2">
                 <span>Total Firm Liability</span>
                 <span className="font-mono">{fmt(result.employerCost?.totalCostToFirm)}</span>
               </div>
-            </div>
 
             <button
                 onClick={processPayroll}
@@ -306,8 +379,8 @@ export default function Payroll() {
                 Select staff and dates to generate<br />the integrated pay run
               </p>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </Layout>
   );

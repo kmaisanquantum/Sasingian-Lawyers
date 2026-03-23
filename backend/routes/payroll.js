@@ -1,6 +1,6 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
-import { query } from '../config/database.js';
+import { query, transaction } from '../config/database.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import PNGPayrollCalculator from '../utils/pngPayroll.js';
 
