@@ -1,21 +1,42 @@
 import { useState, useEffect } from 'react';
-import { Calculator, FileText, CheckCircle, AlertCircle, Users, Clock, TrendingUp } from 'lucide-react';
+import { FileText, Calculator, AlertCircle, CheckCircle, User, Zap, Save } from 'lucide-react';
 import Layout from '../components/Layout';
 import api from '../utils/api';
 
 const fmt = (v) => new Intl.NumberFormat('en-PG', { style: 'currency', currency: 'PGK' }).format(v);
 
 export default function Payroll() {
-  const [form, setForm] = useState({
+  const [staff, setStaff]       = useState([]);
+  const [form, setForm]         = useState({
     staffId: '',
     payFrequency: 'Fortnightly',
+    payPeriodStart: '',
+    payPeriodEnd: '',
     grossPay: '',
     allowances: '0',
     overtimePay: '0',
+    performanceBonus: '0',
     otherDeductions: '0',
-    payPeriodStart: '',
-    payPeriodEnd: new Date().toISOString().split('T')[0]
+    grossPayManual: false
   });
+  const [result, setResult]     = useState(null);
+  const [loading, setLoading]   = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [error, setError]       = useState('');
+  const [success, setSuccess]   = useState('');
+
+  useEffect(() => {
+    loadStaff();
+  }, []);
+
+  async function loadStaff() {
+    try {
+      const { data } = await api.get('/auth/users');
+      setStaff(data.data.filter(u => u.is_active));
+    } catch (e) {
+      setError('Failed to load staff members');
+    }
+  }
 
   const [staff, setStaff] = useState([]);
   const [payData, setPayData] = useState(null);
@@ -73,63 +94,118 @@ export default function Payroll() {
   };
 
   async function calculate(e) {
-    e.preventDefault();
-    setError(''); setResult(null); setLoading(true);
+    if (e) e.preventDefault();
+    setError(''); setResult(null); setSuccess(''); setLoading(true);
     try {
       const { data } = await api.post('/payroll/calculate', {
-        grossPay: parseFloat(form.grossPay),
-        payFrequency: form.payFrequency,
-        allowances: parseFloat(form.allowances || 0),
-        overtimePay: parseFloat(form.overtimePay || 0),
-        otherDeductions: parseFloat(form.otherDeductions || 0)
+        staffId:          form.staffId || undefined,
+        payPeriodStart:   form.payPeriodStart || undefined,
+        payPeriodEnd:     form.payPeriodEnd || undefined,
+        grossPay:         parseFloat(form.grossPay || 0),
+        grossPayManual:   form.grossPayManual,
+        payFrequency:     form.payFrequency,
+        allowances:       parseFloat(form.allowances  || 0),
+        overtimePay:      parseFloat(form.overtimePay || 0),
+        performanceBonus: parseFloat(form.performanceBonus || 0),
+        otherDeductions:  parseFloat(form.otherDeductions || 0)
       });
       setResult(data.data);
+      if (!form.grossPayManual && data.data.grossPay) {
+          set('grossPay', data.data.grossPay.toString());
+      }
     } catch (e) {
       setError(e.response?.data?.message || e.message);
     } finally { setLoading(false); }
   }
 
   async function processPayroll() {
-    if (!result || !form.staffId) return;
-    setLoading(true); setError(''); setSuccess('');
+    if (!result) return;
+    setError(''); setSuccess(''); setProcessing(true);
     try {
       await api.post('/payroll/process', {
-        staffId: form.staffId,
-        payPeriodStart: form.payPeriodStart,
-        payPeriodEnd: form.payPeriodEnd,
-        payFrequency: form.payFrequency,
-        grossPay: parseFloat(form.grossPay),
-        allowances: parseFloat(form.allowances || 0),
-        overtimePay: parseFloat(form.overtimePay || 0),
-        otherDeductions: parseFloat(form.otherDeductions || 0),
-        notes: `Automated run. Productivity Score: ${productivity?.stats?.productivityScore}`
+        staffId:          form.staffId,
+        payPeriodStart:   form.payPeriodStart,
+        payPeriodEnd:     form.payPeriodEnd,
+        grossPay:         result.grossPay,
+        payFrequency:     result.payFrequency,
+        allowances:       result.allowances,
+        overtimePay:      result.overtimePay,
+        performanceBonus: result.performanceBonus,
+        barDues:          result.barDues,
+        leaveDeductions:  result.leaveDeductions,
+        otherDeductions:  result.otherDeductions,
+        notes:            `Integrated payroll run via Staff/HR & Matters`
       });
-      setSuccess('Payroll processed successfully and recorded in Operating Ledger.');
+      setSuccess('Payroll processed and payslip archived successfully.');
       setResult(null);
     } catch (e) {
       setError(e.response?.data?.message || e.message);
-    } finally { setLoading(false); }
+    } finally { setProcessing(false); }
   }
 
   return (
     <Layout>
       <div className="mb-8">
-        <h1 className="font-display text-4xl font-black text-ink">PNG Payroll</h1>
+        <h1 className="font-display text-4xl font-black text-ink">Integrated Payroll</h1>
         <p className="text-ink/50 font-medium mt-1">
-          Automated Salary, SWT & Superannuation management
+          Automated Salary, SWT & Superannuation — Sasingian Lawyers backoffice
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="space-y-6">
-          {/* Configuration Card */}
-          <div className="card p-6">
-            <div className="flex items-center gap-3 mb-6 pb-4 border-b-2 border-ink/10">
-              <Users className="w-5 h-5 text-gold-600" />
-              <h2 className="font-display font-bold text-xl text-ink">1. Select Staff & Period</h2>
+        {/* Calculator Form */}
+        <div className="card p-6">
+          <div className="flex items-center gap-3 mb-6 pb-4 border-b-2 border-ink/10">
+            <div className="w-9 h-9 bg-gold-100 border-2 border-gold-500 flex items-center justify-center">
+              <Calculator className="w-5 h-5 text-gold-700" />
+            </div>
+            <h2 className="font-display font-bold text-xl text-ink">Payroll Parameters</h2>
+          </div>
+
+          <form onSubmit={calculate} className="space-y-5">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <label className="label">Select Staff Member</label>
+                <select className="input" value={form.staffId} onChange={e => set('staffId', e.target.value)}>
+                  <option value="">-- Generic Calculation (No Staff Selected) --</option>
+                  {staff.map(s => (
+                    <option key={s.id} value={s.id}>{s.name} ({s.role} - {s.designation || 'N/A'})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="label">Pay Period Start</label>
+                <input type="date" className="input" value={form.payPeriodStart} onChange={e => set('payPeriodStart', e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Pay Period End</label>
+                <input type="date" className="input" value={form.payPeriodEnd} onChange={e => set('payPeriodEnd', e.target.value)} />
+              </div>
+
+              <div>
+                <label className="label">Pay Frequency</label>
+                <select className="input" value={form.payFrequency} onChange={e => set('payFrequency', e.target.value)}>
+                  <option value="Fortnightly">Fortnightly</option>
+                  <option value="Monthly">Monthly</option>
+                </select>
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="label mb-0">Gross Pay (K)</label>
+                  <label className="text-[10px] font-black uppercase text-ink/40 flex items-center gap-1 cursor-pointer">
+                    <input type="checkbox" className="w-3 h-3" checked={form.grossPayManual} onChange={e => set('grossPayManual', e.target.checked)} />
+                    Manual
+                  </label>
+                </div>
+                <input type="number" min="0" step="0.01" className="input font-mono"
+                  disabled={!form.grossPayManual && !!form.staffId}
+                  value={form.grossPay} onChange={e => set('grossPay', e.target.value)} />
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-ink/5">
               <div>
                 <label className="label">Staff Member</label>
                 <select className="input" value={form.staffId} onChange={e => set('staffId', e.target.value)}>
@@ -147,8 +223,46 @@ export default function Payroll() {
                   <input type="date" className="input" value={form.payPeriodEnd} onChange={e => set('payPeriodEnd', e.target.value)} />
                 </div>
               </div>
+              <div>
+                <label className="label text-gold-700 font-bold">Performance Bonus (K)</label>
+                <input type="number" min="0" step="0.01" className="input border-gold-500 font-mono"
+                  value={form.performanceBonus} onChange={e => set('performanceBonus', e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Other Deductions (K)</label>
+                <input type="number" min="0" step="0.01" className="input font-mono"
+                  value={form.otherDeductions} onChange={e => set('otherDeductions', e.target.value)} />
+              </div>
             </div>
-          </div>
+
+            {error && (
+              <div className="flex items-start gap-2 bg-crimson-50 border-2 border-crimson-600 p-3">
+                <AlertCircle className="w-4 h-4 text-crimson-600 flex-shrink-0 mt-0.5" />
+                <p className="text-crimson-700 text-sm font-medium">{error}</p>
+              </div>
+            )}
+
+            <button type="submit" disabled={loading} className="btn-gold w-full justify-center py-3">
+              {loading ? (
+                <><span className="inline-block w-4 h-4 border-2 border-ink border-t-transparent rounded-full animate-spin" /> Synchronizing…</>
+              ) : <><Calculator className="w-4 h-4" /> Fetch & Calculate</>}
+            </button>
+          </form>
+
+          {/* Productivity suggestion */}
+          {result?.productivity && (
+            <div className="mt-6 bg-gold-50 border-2 border-gold-500 p-4">
+              <div className="flex items-center gap-2 mb-2 text-gold-700">
+                <Zap className="w-4 h-4" />
+                <span className="text-xs font-black uppercase tracking-widest">Attorney Productivity Alert</span>
+              </div>
+              <p className="text-xs font-medium text-ink/70">
+                This staff member has generated <strong>{fmt(result.productivity.billable_value)}</strong> in billable value from <strong>{result.productivity.total_hours}</strong> hours worked across <strong>{result.productivity.matters_worked_on}</strong> matters.
+                Consider applying a performance bonus.
+              </p>
+            </div>
+          )}
+        </div>
 
           {/* Productivity Insights */}
           {productivity && (
@@ -160,24 +274,40 @@ export default function Payroll() {
                 </h3>
                 <span className="badge badge-open text-xs">Score: {productivity.stats.productivityScore}</span>
               </div>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="text-ink/50">Billable Hours</p>
-                  <p className="font-black text-ink">{productivity.stats.totalHours} hrs</p>
-                </div>
-                <div>
-                  <p className="text-ink/50">Billable Value</p>
-                  <p className="font-black text-ink">{fmt(productivity.stats.billableValue)}</p>
-                </div>
+              <div>
+                <h2 className="font-display font-bold text-xl text-ink">Pay Slip Preview</h2>
+                <p className="text-xs text-ink/50 font-medium">
+                  {form.staffId ? staff.find(s => s.id === form.staffId)?.name : 'Generic User'} · {result.payFrequency}
+                </p>
               </div>
             </div>
           )}
 
-          {/* Calculator Form */}
-          <div className="card p-6">
-            <div className="flex items-center gap-3 mb-6 pb-4 border-b-2 border-ink/10">
-              <Calculator className="w-5 h-5 text-gold-600" />
-              <h2 className="font-display font-bold text-xl text-ink">2. Compensation Details</h2>
+            {/* Billable info if hourly */}
+            {result.billableHours > 0 && (
+              <div className="flex items-center gap-2 mb-4 p-2 bg-ink/[0.03] border border-ink/10 rounded">
+                <Zap className="w-3 h-3 text-gold-600" />
+                <span className="text-[10px] font-bold text-ink/60 uppercase tracking-tight">
+                  Fetched from Matters: {result.billableHours} billable hours
+                </span>
+              </div>
+            )}
+
+            {/* Breakdown */}
+            <div className="space-y-2 mb-6">
+              {result.breakdown.map((row, i) => (
+                <div key={i} className={`flex justify-between items-center py-2
+                  ${row.bold ? 'border-t-2 border-b-2 border-ink/20 my-3' : 'border-b border-ink/5'}`}>
+                  <span className={`text-sm ${row.bold ? 'font-black text-ink' : 'text-ink/70 font-medium'}`}>
+                    {row.label}
+                  </span>
+                  <span className={`font-mono text-sm
+                    ${row.bold ? 'font-black text-ink text-base' : ''}
+                    ${row.amount < 0 ? 'text-crimson-600' : 'text-ink'}`}>
+                    {row.amount < 0 ? `- ${fmt(Math.abs(row.amount))}` : fmt(row.amount)}
+                  </span>
+                </div>
+              ))}
             </div>
 
             <form onSubmit={calculate} className="space-y-5">
@@ -196,71 +326,14 @@ export default function Payroll() {
                 </div>
               </div>
 
-              {payData && payData.billableHours > 0 && (
-                <div className="bg-gold-50 p-3 border border-gold-200 text-xs font-medium flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-gold-600" />
-                  Auto-loaded {payData.billableHours} billable hours from timesheets.
-                </div>
-              )}
-
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="label">Allowances</label>
-                  <input type="number" step="0.01" className="input font-mono text-sm"
-                    value={form.allowances} onChange={e => set('allowances', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Overtime</label>
-                  <input type="number" step="0.01" className="input font-mono text-sm"
-                    value={form.overtimePay} onChange={e => set('overtimePay', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Deductions</label>
-                  <input type="number" step="0.01" className="input font-mono text-sm"
-                    value={form.otherDeductions} onChange={e => set('otherDeductions', e.target.value)} />
-                </div>
+            {/* Employer cost */}
+            <div className="bg-gold-50 border-2 border-gold-500 p-4 mb-5">
+              <div className="text-xs font-black uppercase tracking-widest text-gold-700 mb-2">
+                Employer Total Cost (Outflow)
               </div>
-
-              {payData && (payData.leaveDeduction > 0 || payData.mandatoryDeductions > 0) && (
-                <div className="text-[10px] text-ink/40 uppercase font-black tracking-widest flex flex-wrap gap-x-4">
-                   {payData.leaveDeduction > 0 && <span>Unpaid Leave: -{fmt(payData.leaveDeduction)}</span>}
-                   {payData.mandatoryDeductions > 0 && <span>Professional Dues: -{fmt(payData.mandatoryDeductions)}</span>}
-                </div>
-              )}
-
-              {error && (
-                <div className="flex items-start gap-2 bg-crimson-50 border-2 border-crimson-600 p-3">
-                  <AlertCircle className="w-4 h-4 text-crimson-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-crimson-700 text-sm font-medium">{error}</p>
-                </div>
-              )}
-
-              {success && (
-                <div className="flex items-start gap-2 bg-jade-50 border-2 border-jade-600 p-3">
-                  <CheckCircle className="w-4 h-4 text-jade-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-jade-700 text-sm font-medium">{success}</p>
-                </div>
-              )}
-
-              <button type="submit" disabled={loading || !form.staffId} className="btn-gold w-full justify-center py-3">
-                {loading ? 'Processing…' : 'Calculate Pay Run'}
-              </button>
-            </form>
-          </div>
-        </div>
-
-        {/* Result panel */}
-        <div>
-          {result ? (
-            <div className="card p-6 animate-fadeIn sticky top-6">
-              <div className="flex items-center gap-3 mb-6 pb-4 border-b-2 border-ink/10">
-                <div className="w-9 h-9 bg-jade-100 border-2 border-jade-500 flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-jade-700" />
-                </div>
-                <div>
-                  <h2 className="font-display font-bold text-xl text-ink">Review Payslip</h2>
-                  <p className="text-xs text-ink/50 font-medium">{payData?.name} · {form.payFrequency}</p>
-                </div>
+              <div className="flex justify-between text-sm font-medium text-ink/70">
+                <span>Total Earnings</span>
+                <span className="font-mono">{fmt(result.totalEarnings)}</span>
               </div>
 
               <div className="space-y-2 mb-6">
@@ -278,33 +351,32 @@ export default function Payroll() {
                   </div>
                 ))}
               </div>
-
-              <div className="bg-jade-50 border-2 border-jade-500 p-4 mb-6">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <div className="text-xs font-black uppercase tracking-widest text-jade-700 mb-1">Net Payable</div>
-                    <div className="font-display text-3xl font-black text-jade-700">{fmt(result.netPay)}</div>
-                  </div>
-                  <button onClick={processPayroll} disabled={loading} className="btn-jade h-12 px-6">
-                    {loading ? 'Saving…' : 'Finalize & Pay'}
-                  </button>
-                </div>
+              <div className="flex justify-between font-black text-ink border-t-2 border-gold-400 mt-2 pt-2">
+                <span>Total Firm Liability</span>
+                <span className="font-mono">{fmt(result.employerCost?.totalCostToFirm)}</span>
               </div>
 
-              <div className="bg-ink/[0.04] p-4 text-xs font-medium text-ink/50 leading-relaxed">
-                <p>By finalizing, you will:</p>
-                <ul className="list-disc list-inside mt-1 space-y-1">
-                  <li>Record a <strong>Salary</strong> expense of {fmt(result.employerCost.totalCostToFirm)} in the Operating Ledger.</li>
-                  <li>Generate and archive a digital payslip for {payData?.name}.</li>
-                  <li>Update year-to-date earnings for the staff member.</li>
-                </ul>
+            <button
+                onClick={processPayroll}
+                disabled={processing || !form.staffId || !form.payPeriodStart || !form.payPeriodEnd}
+                className="btn-gold w-full justify-center py-3 bg-jade-600 border-jade-700 hover:bg-jade-700"
+            >
+              {processing ? 'Processing...' : <><Save className="w-4 h-4" /> Process & Archive Payslip</>}
+            </button>
+            {!form.staffId && <p className="text-[10px] text-center text-ink/40 mt-2">Select a staff member to process payroll</p>}
+
+            {success && (
+              <div className="mt-4 p-3 bg-jade-50 border border-jade-200 text-jade-700 text-sm font-bold text-center">
+                {success}
               </div>
-            </div>
-          ) : (
-            <div className="card p-6 flex flex-col items-center justify-center min-h-[400px] text-center">
-              <FileText className="w-16 h-16 text-ink/10 mb-4" strokeWidth={1} />
-              <p className="font-bold text-ink/30 uppercase tracking-widest text-sm">
-                Complete the configuration<br />to generate a pay run
+            )}
+          </div>
+        ) : (
+          <div className="card p-6 flex items-center justify-center min-h-[300px]">
+            <div className="text-center text-ink/30">
+              <FileText className="w-16 h-16 mx-auto mb-3" strokeWidth={1} />
+              <p className="font-bold uppercase tracking-wide text-sm">
+                Select staff and dates to generate<br />the integrated pay run
               </p>
             </div>
           )}

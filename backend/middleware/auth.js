@@ -33,7 +33,18 @@ export const authenticate = async (req, res, next) => {
 };
 
 export const authorize = (...roles) => (req, res, next) => {
-  if (!roles.includes(req.user?.role))
+  const userRole = req.user?.role;
+  if (userRole === 'Admin') return next();
+
+  const partnerRoles = ['Partner', 'Managing partner', 'Senior partner', 'Junior partner', 'Non-equity partner', 'Equity partner'];
+
+  const hasAccess = roles.some(role => {
+    if (role === userRole) return true;
+    if (role === 'Partner' && partnerRoles.includes(userRole)) return true;
+    return false;
+  });
+
+  if (!hasAccess)
     return res.status(403).json({ success: false, message: `Requires role: ${roles.join(' or ')}` });
   next();
 };

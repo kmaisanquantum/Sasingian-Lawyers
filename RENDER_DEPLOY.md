@@ -73,7 +73,6 @@ added manually:
 | `JWT_SECRET`     | *(run locally)* `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"` |
 | `ADMIN_PASSWORD` | Your secure admin password                     |
 | `EDWARD_PASSWORD`| Edward's initial password                      |
-| `FLORA_PASSWORD` | Flora's initial password                       |
 
 3. Click **Save Changes** — Render will redeploy automatically.
 
@@ -122,7 +121,6 @@ Output should show:
 ```
 ✅  kmaisan@dspng.tech
 ✅  edward@sasingianpng.com
-✅  flora@sasingianlawyers.com
 ```
 
 #### 6. Add Custom Domain
@@ -196,7 +194,6 @@ If you prefer to set up services individually:
 | `RATE_LIMIT`     | `100`                                                   |
 | `ADMIN_PASSWORD` | *(your choice)*                                         |
 | `EDWARD_PASSWORD`| *(your choice)*                                         |
-| `FLORA_PASSWORD` | *(your choice)*                                         |
 
 5. Click **Create Web Service**
 
@@ -264,7 +261,6 @@ npm run dev          # → http://localhost:5173  (proxies /api to port 10000)
 |---------|--------------------------------|------------------------|
 | Admin   | `kmaisan@dspng.tech`           | `Admin@Sasingian2026!` |
 | Partner | `edward@sasingianpng.com`      | `Edward@Partner2026!`  |
-| Partner | `flora@sasingianlawyers.com`   | `Flora@Partner2026!`   |
 
 ---
 
