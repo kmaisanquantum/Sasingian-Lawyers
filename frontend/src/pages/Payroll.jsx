@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
-import { FileText, Calculator, AlertCircle, CheckCircle, User, Zap, Save } from 'lucide-react';
+import { FileText, Calculator, AlertCircle, TrendingUp, Zap, Save } from 'lucide-react';
 import Layout from '../components/Layout';
 import api from '../utils/api';
 
 const fmt = (v) => new Intl.NumberFormat('en-PG', { style: 'currency', currency: 'PGK' }).format(v);
 
 export default function Payroll() {
-  const [staff, setStaff]       = useState([]);
-  const [form, setForm]         = useState({
+  const [staff, setStaff] = useState([]);
+  const [form, setForm] = useState({
     staffId: '',
     payFrequency: 'Fortnightly',
     payPeriodStart: '',
@@ -19,11 +19,13 @@ export default function Payroll() {
     otherDeductions: '0',
     grossPayManual: false
   });
-  const [result, setResult]     = useState(null);
-  const [loading, setLoading]   = useState(false);
+  const [payData, setPayData] = useState(null);
+  const [productivity, setProductivity] = useState(null);
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [error, setError]       = useState('');
-  const [success, setSuccess]   = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   useEffect(() => {
     loadStaff();
@@ -35,27 +37,6 @@ export default function Payroll() {
       setStaff(data.data.filter(u => u.is_active));
     } catch (e) {
       setError('Failed to load staff members');
-    }
-  }
-
-  const [staff, setStaff] = useState([]);
-  const [payData, setPayData] = useState(null);
-  const [productivity, setProductivity] = useState(null);
-  const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-
-  useEffect(() => {
-    loadStaff();
-  }, []);
-
-  async function loadStaff() {
-    try {
-      const { data } = await api.get('/auth/users');
-      setStaff(data.data || []);
-    } catch (e) {
-      setError('Failed to load staff members.');
     }
   }
 
@@ -82,6 +63,7 @@ export default function Payroll() {
         otherDeductions: (parseFloat(d.leaveDeduction || 0) + parseFloat(d.mandatoryDeductions || 0)).toString()
       }));
     } catch (e) {
+      console.error(e);
       setError('Failed to fetch automated pay data.');
     } finally {
       setLoading(false);
@@ -138,6 +120,8 @@ export default function Payroll() {
       });
       setSuccess('Payroll processed and payslip archived successfully.');
       setResult(null);
+      setProductivity(null);
+      setPayData(null);
     } catch (e) {
       setError(e.response?.data?.message || e.message);
     } finally { setProcessing(false); }
@@ -203,26 +187,7 @@ export default function Payroll() {
                   disabled={!form.grossPayManual && !!form.staffId}
                   value={form.grossPay} onChange={e => set('grossPay', e.target.value)} />
               </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-ink/5">
-              <div>
-                <label className="label">Staff Member</label>
-                <select className="input" value={form.staffId} onChange={e => set('staffId', e.target.value)}>
-                  <option value="">-- Select Staff --</option>
-                  {staff.map(s => <option key={s.id} value={s.id}>{s.name} ({s.role})</option>)}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Period Start</label>
-                  <input type="date" className="input" value={form.payPeriodStart} onChange={e => set('payPeriodStart', e.target.value)} />
-                </div>
-                <div>
-                  <label className="label">Period End</label>
-                  <input type="date" className="input" value={form.payPeriodEnd} onChange={e => set('payPeriodEnd', e.target.value)} />
-                </div>
-              </div>
               <div>
                 <label className="label text-gold-700 font-bold">Performance Bonus (K)</label>
                 <input type="number" min="0" step="0.01" className="input border-gold-500 font-mono"
@@ -250,93 +215,42 @@ export default function Payroll() {
           </form>
 
           {/* Productivity suggestion */}
-          {result?.productivity && (
-            <div className="mt-6 bg-gold-50 border-2 border-gold-500 p-4">
+          {productivity && (
+             <div className="mt-6 bg-gold-50 border-2 border-gold-500 p-4">
               <div className="flex items-center gap-2 mb-2 text-gold-700">
                 <Zap className="w-4 h-4" />
                 <span className="text-xs font-black uppercase tracking-widest">Attorney Productivity Alert</span>
               </div>
               <p className="text-xs font-medium text-ink/70">
-                This staff member has generated <strong>{fmt(result.productivity.billable_value)}</strong> in billable value from <strong>{result.productivity.total_hours}</strong> hours worked across <strong>{result.productivity.matters_worked_on}</strong> matters.
-                Consider applying a performance bonus.
+                This staff member has generated <strong>{fmt(productivity.billable_value || 0)}</strong> in billable value from <strong>{productivity.total_hours || 0}</strong> hours worked.
+                Productivity Score: <strong>{productivity.stats?.productivityScore || 'N/A'}</strong>.
               </p>
             </div>
           )}
         </div>
 
-          {/* Productivity Insights */}
-          {productivity && (
+        {/* Results / Preview Area */}
+        <div className="space-y-6">
+          {result ? (
             <div className="card p-6 border-l-4 border-jade-500">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-ink flex items-center gap-2">
                   <TrendingUp className="w-4 h-4 text-jade-600" />
-                  Attorney Productivity
+                  Pay Slip Preview
                 </h3>
-                <span className="badge badge-open text-xs">Score: {productivity.stats.productivityScore}</span>
+                <span className="badge badge-open text-xs">{result.payFrequency}</span>
               </div>
+
               <div>
-                <h2 className="font-display font-bold text-xl text-ink">Pay Slip Preview</h2>
+                <h2 className="font-display font-bold text-xl text-ink">
+                   {form.staffId ? staff.find(s => s.id === form.staffId)?.name : 'Generic Calculation'}
+                </h2>
                 <p className="text-xs text-ink/50 font-medium">
-                  {form.staffId ? staff.find(s => s.id === form.staffId)?.name : 'Generic User'} · {result.payFrequency}
+                  {form.payPeriodStart} to {form.payPeriodEnd}
                 </p>
               </div>
-            </div>
-          )}
 
-            {/* Billable info if hourly */}
-            {result.billableHours > 0 && (
-              <div className="flex items-center gap-2 mb-4 p-2 bg-ink/[0.03] border border-ink/10 rounded">
-                <Zap className="w-3 h-3 text-gold-600" />
-                <span className="text-[10px] font-bold text-ink/60 uppercase tracking-tight">
-                  Fetched from Matters: {result.billableHours} billable hours
-                </span>
-              </div>
-            )}
-
-            {/* Breakdown */}
-            <div className="space-y-2 mb-6">
-              {result.breakdown.map((row, i) => (
-                <div key={i} className={`flex justify-between items-center py-2
-                  ${row.bold ? 'border-t-2 border-b-2 border-ink/20 my-3' : 'border-b border-ink/5'}`}>
-                  <span className={`text-sm ${row.bold ? 'font-black text-ink' : 'text-ink/70 font-medium'}`}>
-                    {row.label}
-                  </span>
-                  <span className={`font-mono text-sm
-                    ${row.bold ? 'font-black text-ink text-base' : ''}
-                    ${row.amount < 0 ? 'text-crimson-600' : 'text-ink'}`}>
-                    {row.amount < 0 ? `- ${fmt(Math.abs(row.amount))}` : fmt(row.amount)}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <form onSubmit={calculate} className="space-y-5">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Pay Frequency</label>
-                  <select className="input" value={form.payFrequency} onChange={e => set('payFrequency', e.target.value)}>
-                    <option value="Fortnightly">Fortnightly</option>
-                    <option value="Monthly">Monthly</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Gross Pay (K)</label>
-                  <input type="number" step="0.01" required className="input font-mono"
-                    value={form.grossPay} onChange={e => set('grossPay', e.target.value)} />
-                </div>
-              </div>
-
-            {/* Employer cost */}
-            <div className="bg-gold-50 border-2 border-gold-500 p-4 mb-5">
-              <div className="text-xs font-black uppercase tracking-widest text-gold-700 mb-2">
-                Employer Total Cost (Outflow)
-              </div>
-              <div className="flex justify-between text-sm font-medium text-ink/70">
-                <span>Total Earnings</span>
-                <span className="font-mono">{fmt(result.totalEarnings)}</span>
-              </div>
-
-              <div className="space-y-2 mb-6">
+              <div className="mt-6 space-y-2 mb-6">
                 {result.breakdown.map((row, i) => (
                   <div key={i} className={`flex justify-between items-center py-2
                     ${row.bold ? 'border-t-2 border-b-2 border-ink/20 my-3' : 'border-b border-ink/5'}`}>
@@ -351,33 +265,45 @@ export default function Payroll() {
                   </div>
                 ))}
               </div>
-              <div className="flex justify-between font-black text-ink border-t-2 border-gold-400 mt-2 pt-2">
-                <span>Total Firm Liability</span>
-                <span className="font-mono">{fmt(result.employerCost?.totalCostToFirm)}</span>
+
+              {/* Employer cost */}
+              <div className="bg-gold-50 border-2 border-gold-500 p-4 mb-5">
+                <div className="text-xs font-black uppercase tracking-widest text-gold-700 mb-2">
+                  Employer Total Cost (Outflow)
+                </div>
+                <div className="flex justify-between text-sm font-medium text-ink/70">
+                  <span>Total Earnings</span>
+                  <span className="font-mono">{fmt(result.totalEarnings)}</span>
+                </div>
+                <div className="flex justify-between font-black text-ink border-t-2 border-gold-400 mt-2 pt-2">
+                  <span>Total Firm Liability</span>
+                  <span className="font-mono">{fmt(result.employerCost?.totalCostToFirm)}</span>
+                </div>
               </div>
 
-            <button
-                onClick={processPayroll}
-                disabled={processing || !form.staffId || !form.payPeriodStart || !form.payPeriodEnd}
-                className="btn-gold w-full justify-center py-3 bg-jade-600 border-jade-700 hover:bg-jade-700"
-            >
-              {processing ? 'Processing...' : <><Save className="w-4 h-4" /> Process & Archive Payslip</>}
-            </button>
-            {!form.staffId && <p className="text-[10px] text-center text-ink/40 mt-2">Select a staff member to process payroll</p>}
+              <button
+                  onClick={processPayroll}
+                  disabled={processing || !form.staffId || !form.payPeriodStart || !form.payPeriodEnd}
+                  className="btn-gold w-full justify-center py-3 bg-jade-600 border-jade-700 hover:bg-jade-700"
+              >
+                {processing ? 'Processing...' : <><Save className="w-4 h-4" /> Process & Archive Payslip</>}
+              </button>
+              {!form.staffId && <p className="text-[10px] text-center text-ink/40 mt-2">Select a staff member to process payroll</p>}
 
-            {success && (
-              <div className="mt-4 p-3 bg-jade-50 border border-jade-200 text-jade-700 text-sm font-bold text-center">
-                {success}
+              {success && (
+                <div className="mt-4 p-3 bg-jade-50 border border-jade-200 text-jade-700 text-sm font-bold text-center">
+                  {success}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="card p-6 flex items-center justify-center min-h-[400px]">
+              <div className="text-center text-ink/30">
+                <FileText className="w-16 h-16 mx-auto mb-3" strokeWidth={1} />
+                <p className="font-bold uppercase tracking-wide text-sm">
+                  Select staff and dates to generate<br />the integrated pay run
+                </p>
               </div>
-            )}
-          </div>
-        ) : (
-          <div className="card p-6 flex items-center justify-center min-h-[300px]">
-            <div className="text-center text-ink/30">
-              <FileText className="w-16 h-16 mx-auto mb-3" strokeWidth={1} />
-              <p className="font-bold uppercase tracking-wide text-sm">
-                Select staff and dates to generate<br />the integrated pay run
-              </p>
             </div>
           )}
         </div>
