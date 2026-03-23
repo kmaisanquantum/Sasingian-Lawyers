@@ -34,7 +34,7 @@ export default function Payroll() {
   async function loadStaff() {
     try {
       const { data } = await api.get('/auth/users');
-      setStaff(data.data.filter(u => u.is_active));
+      setStaff(data.data.filter(u => u.is_active && u.role !== 'Admin'));
     } catch (e) {
       setError('Failed to load staff members');
     }
