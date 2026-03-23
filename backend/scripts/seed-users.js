@@ -29,6 +29,7 @@ const pool = new Pool({
 const users = [
   { email: 'kmaisan@dspng.tech',         password: process.env.ADMIN_PASSWORD   || 'Admin@Sasingian2026!'  },
   { email: 'edward@sasingianpng.com',    password: process.env.EDWARD_PASSWORD  || 'Edward@Partner2026!'  },
+  { email: 'flora@sasingianpng.com',     password: process.env.FLORA_PASSWORD   || 'Flora@Partner2026!'  },
 ];
 
 const PLACEHOLDER_HASH = '$2b$10$PLACEHOLDER';
