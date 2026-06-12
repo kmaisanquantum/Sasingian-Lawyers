@@ -50,6 +50,14 @@ To manually run the initialization if needed (via Coolify Terminal or Docker exe
 
 ## 4. Troubleshooting
 
-- Check Logs: Use the Logs tab in Coolify to see the application output.
-- Database Connection: Ensure the DATABASE_URL is correct and accessible.
-- Port Conflict: If port 3000 is taken, you can change the PORT env var and the Coolify port configuration.
+### ECONNREFUSED Errors
+If you see `ECONNREFUSED` or `AggregateError [ECONNREFUSED]` in the logs:
+1. **Check DATABASE_URL**: Ensure it is NOT pointing to `localhost` or `127.0.0.1`. Inside a Docker container, `localhost` refers to the container itself, not your server or the database container.
+2. **Database Accessibility**: Ensure your database is accessible from the Coolify application container. If using another Coolify resource, use its internal network address.
+3. **Internal Network**: If the database is also in Coolify, you can use the service name as the host (e.g., `postgresql://user:pass@database:5432/dbname`).
+
+### Port Conflicts
+If port 3000 is taken, you can change the PORT env var and the Coolify port configuration.
+
+### Missing Environment Variables
+If the app crashes with "CRITICAL ERROR: DATABASE_URL is not set", ensure you have added all variables in Step 3 and clicked **Save**.

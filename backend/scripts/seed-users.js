@@ -4,11 +4,6 @@
  * Run once after initialising the database:   npm run seed
  */
 import bcrypt from 'bcryptjs';
-if (process.env.RENDER_BUILD_ID) {
-  console.log('🏗️  Render build detected. Skipping seeding.');
-  process.exit(0);
-}
-
 import pg     from 'pg';
 import dotenv from 'dotenv';
 import { spawnSync } from 'child_process';
@@ -16,6 +11,16 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 dotenv.config();
+
+if (process.env.RENDER_BUILD_ID) {
+  console.log('🏗️  Render build detected. Skipping seeding.');
+  process.exit(0);
+}
+
+if (!process.env.DATABASE_URL) {
+  console.error('❌ ERROR: DATABASE_URL is not set. Skipping seeding.');
+  process.exit(1);
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -94,7 +99,10 @@ async function runMigration() {
 }
 
 seed().then(runMigration).catch(err => {
-  console.error('Seed failed:', err);
+  console.error('Seed failed:', err.message);
+  if (err.message.includes('ECONNREFUSED')) {
+    console.error('  👉 Tip: The database host might be unreachable. Check your DATABASE_URL.');
+  }
   // Exit with 0 to allow application boot even if seeding fails
   process.exit(0);
 }).finally(() => {
